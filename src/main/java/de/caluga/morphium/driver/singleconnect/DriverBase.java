@@ -563,7 +563,7 @@ public abstract class DriverBase implements MorphiumDriver {
 
     protected abstract void sendQuery(OpQuery q) throws MorphiumDriverException;
 
-    protected abstract OpReply getReply(long waitingFor, int timeout) throws MorphiumDriverException;
+    protected abstract OpReply getReply(int waitingFor, int timeout) throws MorphiumDriverException;
 
 
     protected void killCursors(String db, String coll, long... ids) throws MorphiumDriverException {
@@ -640,7 +640,7 @@ public abstract class DriverBase implements MorphiumDriver {
             sendQuery(q);
 
             OpReply reply;
-            long waitingfor = q.getReqId();
+            int waitingfor = q.getReqId();
             long cursorId;
             log.info("Starting...");
 

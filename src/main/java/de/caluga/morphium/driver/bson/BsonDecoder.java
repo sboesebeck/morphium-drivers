@@ -5,6 +5,7 @@ package de.caluga.morphium.driver.bson;/**
 import de.caluga.morphium.driver.MorphiumId;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -51,7 +52,7 @@ public class BsonDecoder {
                 case 0x02:
                     //string
                     int strlen = readInt(in, idx);
-                    value = new String(in, idx + 4, strlen - 1, "UTF-8");
+                    value = new String(in, idx + 4, strlen - 1, StandardCharsets.UTF_8);
                     idx += strlen + 4;
                     break;
                 case 0x03:

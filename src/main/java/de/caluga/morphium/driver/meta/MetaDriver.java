@@ -142,12 +142,6 @@ public class MetaDriver extends DriverBase {
                                 }
                                 Connection c = connectionPool.get(host).get(i);
                                 housekeep(c);
-                                if (connectionsInUse.get(c.getHost()) != null) {
-                                    connectionsInUse.get(c.getHost()).remove(c);
-                                }
-                                if (connectionPool.get(c.getHost()) != null) {
-                                    connectionPool.get(c.getHost()).remove(c);
-                                }
                             }
                         }
                     } catch (Exception e) {
@@ -174,10 +168,10 @@ public class MetaDriver extends DriverBase {
                     if (!c.inUse && System.currentTimeMillis() - c.created > getMaxConnectionLifetime()) {
                         connectionPool.get(c.getHost()).remove(c);
                         if (c.inUse) {
-                            //some other thread was faster
+                            log.error("Something is wrong!");
                             return;
                         }
-                        log.debug("Maximum life time reached, killing myself");
+                        log.info("Maximum life time reached, killing myself");
                         //noinspection EmptyCatchBlock
                         try {
                             c.close();
@@ -194,9 +188,10 @@ public class MetaDriver extends DriverBase {
                         if (connectionPool.get(c.getHost()).size() > getMinConnectionsPerHost()) {
                             connectionPool.get(c.getHost()).remove(c);
                             if (c.inUse) {
-                                //some other thread won
+                                log.error("Something is wrong!");
                                 return;
                             }
+                            log.info("Maximum idle time reached, killing myself");
                             //noinspection EmptyCatchBlock
                             try {
                                 c.close();
@@ -969,8 +964,9 @@ public class MetaDriver extends DriverBase {
         int min = 9999;
         for (String h : secondaries) {
             if (connectionsInUse.get(h) == null) {
-                min = 0;
-                least = h;
+                return getConnection(h);
+            } else if (connectionsInUse.get(h).size() == 0) {
+                return getConnection(h);
             } else if (connectionsInUse.get(h).size() < min) {
                 least = h;
                 min = connectionPool.get(h).size();
@@ -990,11 +986,17 @@ public class MetaDriver extends DriverBase {
                 try {
                     return getMasterConnection();
                 } catch (Exception e) {
-                    log.warn("could not get master connection...", e);
+                    return getSecondaryConnection();
                 }
             case NEAREST:
                 if (fastestHost != null) {
-                    return getConnection(fastestHost);
+                    if (getConnectionsInUse(fastestHost).size() < getMaxConnectionsPerHost()) {
+                        try {
+                            return getConnection(fastestHost);
+                        } catch (MorphiumDriverException e) {
+                            //ignoring
+                        }
+                    }
                 }
             case SECONDARY:
                 return getSecondaryConnection();
@@ -1029,7 +1031,6 @@ public class MetaDriver extends DriverBase {
         }
         getConnectionsInUse(c.getHost()).remove(c);
         c.setInUse(false);
-
         getConnections(c.getHost()).add(c);
     }
 
@@ -1048,7 +1049,7 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    protected OpReply getReply(long waitingFor, int timeout) throws MorphiumDriverException {
+    protected OpReply getReply(int waitingFor, int timeout) throws MorphiumDriverException {
         return null;
     }
 

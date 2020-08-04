@@ -114,6 +114,31 @@ public class MorphiumDriverSpeedTest {
     //
     //    }
 
+
+    @Test
+    public void profilingTest() throws Exception {
+        Morphium m = null;
+        MorphiumConfig cfg = null;
+
+        cfg = new MorphiumConfig("morphium_test", 100, 1000, 1000);
+        cfg.setMinConnectionsPerHost(5);
+        cfg.addHostToSeed("localhost");
+        cfg.setReplicasetMonitoring(false);
+        cfg.setDriverClass(MetaDriver.class.getName());
+        cfg.setMaxWaitTime(3000);
+        cfg.setMaxConnectionIdleTime(10000);
+        cfg.setMaxConnectionLifeTime(50000);
+        m = new Morphium(cfg);
+        //        m.getDriver().connect();
+        //        Thread.sleep(10000);
+        log.info("+++++++++++   ++++++    Profiling Metadriver:");
+        while (true) {
+            long tm = doTest(m);
+            if (tm < 10) break;
+        }
+        m.close();
+    }
+
     @Test
     public void speedCompare() throws Exception {
         Morphium m = null;
@@ -122,16 +147,18 @@ public class MorphiumDriverSpeedTest {
         cfg = new MorphiumConfig("morphium_test", 100, 1000, 1000);
         cfg.setMinConnectionsPerHost(5);
         cfg.addHostToSeed("localhost");
-        cfg.setReplicasetMonitoring(true);
+        cfg.setReplicasetMonitoring(false);
         cfg.setDriverClass(MetaDriver.class.getName());
         cfg.setMaxWaitTime(3000);
+        cfg.setCursorBatchSize(10000);
         m = new Morphium(cfg);
         //        m.getDriver().connect();
         //        Thread.sleep(10000);
         log.info("+++++++++++   ++++++    Testing with Metadriver:");
         log.info("+++++++++++   ++++++    Testing with Metadriver:");
         log.info("+++++++++++   ++++++    Testing with Metadriver:");
-        long tm = doTest(m);
+        long tm = doTest(m); //ignoring first run
+        tm = doTest(m);
         tm += doTest(m);
         tm += doTest(m);
         log.info("===============> Testing with Metadriver: Average " + (tm / 3));
@@ -148,6 +175,7 @@ public class MorphiumDriverSpeedTest {
         log.info("+++++++++++   ++++++    Testing with SingeConnect driver:");
         log.info("+++++++++++   ++++++    Testing with SingeConnect driver:");
         log.info("+++++++++++   ++++++    Testing with SingeConnect driver:");
+        tm = doTest(m); //ignoring first run
         tm = doTest(m);
         tm += doTest(m);
         tm += doTest(m);
@@ -166,6 +194,7 @@ public class MorphiumDriverSpeedTest {
         log.info("+++++++++++   ++++++    Testing with SingeConnectDirect driver:");
         log.info("+++++++++++   ++++++    Testing with SingeConnectDirect driver:");
         log.info("+++++++++++   ++++++    Testing with SingeConnectDirect driver:");
+        tm = doTest(m); //ignoring first run
         tm = doTest(m);
         tm += doTest(m);
         tm += doTest(m);
@@ -180,6 +209,7 @@ public class MorphiumDriverSpeedTest {
         cfg.addHostToSeed("localhost");
         cfg.setReplicasetMonitoring(false);
         m = new Morphium(cfg);
+        tm = doTest(m); //ignoring first run
         tm = doTest(m);
         tm += doTest(m);
         tm += doTest(m);
@@ -264,7 +294,12 @@ public class MorphiumDriverSpeedTest {
             c = m.createQueryFor(UncachedObject.class).countAll();
             dur = System.currentTimeMillis() - start;
         }
-        log.info("Count took:  " + dur);
+        log.info("persisted after:  " + dur);
+
+        start = System.currentTimeMillis();
+        c = m.createQueryFor(UncachedObject.class).countAll();
+        dur = System.currentTimeMillis() - start;
+        log.info("count took:  " + dur);
         //        log.info("Counter=="+c);
 
         start = System.currentTimeMillis();

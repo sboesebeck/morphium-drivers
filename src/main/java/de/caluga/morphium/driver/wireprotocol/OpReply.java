@@ -139,10 +139,10 @@ public class OpReply extends WireProtocolMessage {
         numReturned = WireProtocolMessage.readInt(bytes, offset);
         offset += 4;
 
+        BsonDecoder dec = new BsonDecoder();
         documents = new ArrayList<>();
         for (int i = 0; i < numReturned; i++) {
             Map<String, Object> m = new HashMap<>();
-            BsonDecoder dec = new BsonDecoder();
             int l = dec.decodeDocumentIn(m, bytes, offset);
             offset += l;
             documents.add(m);

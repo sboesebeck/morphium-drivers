@@ -16,19 +16,19 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
  * connects to one node only, creates a thread for reading data from mongo. Is  theradsafe.
  **/
 public class SingleConnectThreaddedDriver extends DriverBase {
-
-    private final List<OpReply> replies = new ArrayList<>();
+    private final Map<Integer, ReplyListener> waitingForReplies = new ConcurrentHashMap<>();
     private final Logger log = LoggerFactory.getLogger(SingleConnectThreaddedDriver.class);
     private Socket s;
     private OutputStream out;
     private InputStream in;
-    private volatile int waitingForReply = 0;
+    private Thread reader;
 
 
     private void reconnect() throws MorphiumDriverException {
@@ -43,6 +43,8 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             out = null;
             //            e.printStackTrace();
         }
+        reader.interrupt();
+        reader = null;
         connect();
     }
 
@@ -52,6 +54,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             log.error("Already connected! not reconnecting!");
             return;
         }
+
         try {
             String host = getHostSeed()[0];
             String h[] = host.split(":");
@@ -68,7 +71,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
 
 
             //Reader
-            Thread reader = new Thread() {
+            reader = new Thread() {
                 @Override
                 public void run() {
                     setName("singleconnecthreaddeddriver_thread");
@@ -93,14 +96,12 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                             }
                             if (size > 16 * 1024 * 1024) {
                                 log.error("Error - size too big! " + size);
-                                System.exit(1);
-                                break;
+                                throw new RuntimeException("Driver cannot continue - broken protocol data!");
                             }
                             int opcode = OpReply.readInt(inBuffer, 12);
                             if (opcode != 1) {
                                 log.error("illegal opcode! " + opcode);
-                                System.exit(1);
-                                break;
+                                throw new RuntimeException("Driver cannot continue - broken protocol data!");
                             }
                             byte buf[] = new byte[size];
                             System.arraycopy(inBuffer, 0, buf, 0, 16);
@@ -144,10 +145,9 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                                         log.debug("Error " + reply.getDocuments().get(0).get("errmsg"));
                                     }
                                 }
-                                synchronized (replies) {
-                                    replies.add(reply);
-                                    ArrayList<OpReply> toRemove = replies.stream().filter(r -> System.currentTimeMillis() - r.timestamp > getHeartbeatSocketTimeout()).collect(Collectors.toCollection(ArrayList::new));
-                                    replies.removeAll(toRemove);
+
+                                if (waitingForReplies.containsKey(reply.getInReplyTo())) {
+                                    waitingForReplies.remove(reply.getInReplyTo()).reply(reply);
                                 }
                             } catch (Exception e) {
                                 log.error("Could not read", e);
@@ -259,19 +259,30 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             q.setDoc(doc);
             q.setInReplyTo(0);
 
-            OpReply rep = null;
-            sendQuery(q);
-            try {
-                rep = waitForReply(db, null, null, q.getReqId());
-            } catch (MorphiumDriverException e) {
-                e.printStackTrace();
-            }
+            OpReply rep = sendAndWaitForReply(q);
             if (rep == null || rep.getDocuments() == null) {
                 return null;
             }
             return rep.getDocuments().get(0);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
 
+    }
+
+    private OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException {
+        final OpReply[] rep = new OpReply[1];
+        ReplyListener rl = (r) -> {
+            rep[0] = r;
+        };
+        waitingForReplies.put(q.getReqId(), rl);
+        long start = System.currentTimeMillis();
+        sendQuery(q);
+        while (rep[0] == null) {
+            if (System.currentTimeMillis() - start > getMaxWaitTime()) {
+                throw new MorphiumDriverException("Timeout");
+            }
+            Thread.yield();
+        }
+        return rep[0];
     }
 
     @Override
@@ -302,15 +313,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
         q.setFlags(0);
         q.setInReplyTo(0);
 
-        OpReply reply;
-        sendQuery(q);
-
-        int waitingfor = q.getReqId();
-        reply = getReply(waitingfor);
-        if (reply.getInReplyTo() != waitingfor) {
-            throw new MorphiumDriverNetworkException("Got wrong answser. Request: " + waitingfor + " got answer for " + reply.getInReplyTo());
-        }
-
+        OpReply reply = sendAndWaitForReply(q);
 
         MorphiumCursor crs = new MorphiumCursor();
         @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocuments().get(0).get("cursor");
@@ -372,8 +375,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
         doc.put("batchSize", internalCursorData.getBatchSize());
         q.setDoc(doc);
 
-        sendQuery(q);
-        reply = getReply(q.getReqId());
+        reply = sendAndWaitForReply(q);
         crs = new MorphiumCursor();
         //noinspection unchecked
         crs.setInternalCursorObject(internalCursorData);
@@ -444,26 +446,22 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             q.setInReplyTo(0);
 
             List<Map<String, Object>> ret;
-            sendQuery(q);
 
-            OpReply reply = null;
-            int waitingfor = q.getReqId();
-            ret = readBatches(waitingfor, db, collection, batchSize);
+            ret = readBatches(q, db, collection, batchSize);
             return Utils.getMap("values", ret);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries()).get("values");
 
     }
 
-    private List<Map<String, Object>> readBatches(int waitingfor, String db, String collection, int batchSize) throws MorphiumDriverException {
+    private List<Map<String, Object>> readBatches(OpQuery q, String db, String collection, int batchSize) throws MorphiumDriverException {
+
         List<Map<String, Object>> ret = new ArrayList<>();
         OpReply reply;
-        OpQuery q;
+
         Map<String, Object> doc;
         while (true) {
-            reply = getReply(waitingfor);
-            if (reply.getInReplyTo() != waitingfor) {
-                throw new MorphiumDriverNetworkException("Wrong answer - waiting for " + waitingfor + " but got " + reply.getInReplyTo());
-            }
+            reply = sendAndWaitForReply(q);
+
             @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocuments().get(0).get("cursor");
             if (cursor == null) {
                 //trying result
@@ -497,8 +495,6 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 doc.put("collection", collection);
                 doc.put("batchSize", batchSize);
                 q.setDoc(doc);
-                waitingfor = q.getReqId();
-                sendQuery(q);
             } else {
                 break;
             }
@@ -506,38 +502,25 @@ public class SingleConnectThreaddedDriver extends DriverBase {
         return ret;
     }
 
-
-    private OpReply getReply(long waitingfor) throws MorphiumDriverException {
-        return getReply(waitingfor, getMaxWaitTime());
-    }
-
     @Override
-    protected OpReply getReply(long waitingfor, int maxWait) throws MorphiumDriverException {
-        waitingForReply++;
-        try {
-            long start = System.currentTimeMillis();
-            while (true) {
-                synchronized (replies) {
-                    for (int i = 0; i < replies.size(); i++) {
-                        if (replies.get(i).getInReplyTo() == waitingfor) {
-                            //                        if (!reply.getDocuments().get(0).get("ok").equals(1)) {
-                            //                            if (reply.getDocuments().get(0).get("code") != null) {
-                            //                                log.info("Error " + reply.getDocuments().get(0).get("code"));
-                            //                                log.info("Error " + reply.getDocuments().get(0).get("errmsg"));
-                            //                            }
-                            //                        }
-                            return replies.remove(i);
-                        }
-                    }
-                    if (System.currentTimeMillis() - start > maxWait) {
-                        throw new MorphiumDriverNetworkException("could not get reply in time");
-                    }
-                }
-                Thread.yield();
+    protected OpReply getReply(int waitingfor, int maxWait) throws MorphiumDriverException {
+        final Object monitor = new Object();
+        final OpReply[] rep = new OpReply[1];
+        ReplyListener replyListener = (r) -> {
+            rep[0] = r;
+            synchronized (monitor) {
+                monitor.notify();
             }
-        } finally {
-            waitingForReply--;
+        };
+        waitingForReplies.put(waitingfor, replyListener);
+        try {
+            synchronized (monitor) {
+                monitor.wait(maxWait);
+            }
+        } catch (InterruptedException e) {
+            throw new MorphiumDriverException("Timeout waiting for reply...");
         }
+        return rep[0];
     }
 
     @Override
@@ -587,9 +570,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
 
             q.setInReplyTo(0);
 
-            OpReply rep;
-            sendQuery(q);
-            rep = waitForReply(db, collection, query, q.getReqId());
+            OpReply rep = sendAndWaitForReply(q);
             Integer n = (Integer) rep.getDocuments().get(0).get("n");
             return Utils.getMap("count", n == null ? 0 : n);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
@@ -600,6 +581,8 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     public void insert(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
         new NetworkCallHelper().doCall(() -> {
             int idx = 0;
+
+            long start = System.currentTimeMillis();
             for (Map<String, Object> o : objs) {
                 o.putIfAbsent("_id", new MorphiumId());
             }
@@ -614,7 +597,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 map.put("insert", collection);
 
                 List<Map<String, Object>> docs = new ArrayList<>();
-                for (int i = idx; i < idx + 1000 && i < objs.size(); i++) {
+                for (int i = idx; i < idx + getMaxWriteBatchSize() && i < objs.size(); i++) {
                     docs.add(objs.get(i));
                 }
                 idx += docs.size();
@@ -623,8 +606,11 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 map.put("writeConcern", new HashMap<String, Object>());
                 op.setDoc(map);
 
-                sendQuery(op);
-                waitForReply(db, collection, null, op.getReqId());
+                if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+                    sendAndWaitForReply(op);
+                } else {
+                    sendQuery(op); //no need to wait for reply...
+                }
             }
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
@@ -635,7 +621,6 @@ public class SingleConnectThreaddedDriver extends DriverBase {
         return new NetworkCallHelper().doCall(() -> {
             List<Map<String, Object>> toInsert = new ArrayList<>();
             List<Map<String, Object>> toUpdate = new ArrayList<>();
-            List<Map<String, Object>> update = new ArrayList<>();
             for (Map<String, Object> o : objs) {
                 if (o.get("_id") == null) {
                     toInsert.add(o);
@@ -696,10 +681,10 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 map.put("ordered", false);
                 map.put("writeConcern", new HashMap<String, Object>());
                 op.setDoc(map);
-                sendQuery(op);
-                if (wc != null) {
-                    OpReply res = waitForReply(db, collection, null, op.getReqId());
-                    return res.getDocuments().get(0);
+                if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+                    sendAndWaitForReply(op);
+                } else {
+                    sendQuery(op); //no need to wait for reply...
                 }
             }
             return null;
@@ -736,35 +721,14 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             o.put("deletes", del);
             op.setDoc(o);
 
-
-            sendQuery(op);
-
-            int waitingfor = op.getReqId();
-            //        if (wc == null || wc.getW() == 0) {
-            waitForReply(db, collection, query, waitingfor);
+            if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+                sendAndWaitForReply(op);
+            } else {
+                sendQuery(op); //no need to wait for reply...
+            }
             //        }
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
-    }
-
-    private OpReply waitForReply(String db, String collection, Map<String, Object> query, int waitingfor) throws MorphiumDriverException {
-        OpReply reply;
-        reply = getReply(waitingfor);
-        if (!reply.getDocuments().get(0).get("ok").equals(1) && !reply.getDocuments().get(0).get("ok").equals(1.0)) {
-            Object code = reply.getDocuments().get(0).get("code");
-            if (code.equals(Integer.valueOf(76))) {
-                log.info("not running as replicaSet");
-                return reply;
-            }
-            Object errmsg = reply.getDocuments().get(0).get("errmsg");
-            MorphiumDriverException mde = new MorphiumDriverException("Operation failed on " + getHostSeed()[0] + " - error: " + code + " - " + errmsg, null, collection, db, query);
-            mde.setMongoCode(code);
-            mde.setMongoReason(errmsg);
-
-            throw mde;
-        }
-
-        return reply;
     }
 
     @Override
@@ -779,15 +743,10 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             HashMap<String, Object> map = new LinkedHashMap<>();
             map.put("drop", collection);
             op.setDoc(map);
-            sendQuery(op);
-            try {
-                waitForReply(db, collection, null, op.getReqId());
-            } catch (Exception e) {
-                if (e instanceof MorphiumDriverException && e.getMessage().contains("ns not found")) {
-                    log.debug("Drop failed, non existent collection");
-                } else {
-                    log.debug("Drop failed! " + e.getMessage(), e);
-                }
+            if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+                sendAndWaitForReply(op);
+            } else {
+                sendQuery(op); //no need to wait for reply...
             }
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
@@ -805,11 +764,11 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             HashMap<String, Object> map = new LinkedHashMap<>();
             map.put("drop", 1);
             op.setDoc(map);
-            sendQuery(op);
-            try {
-                waitForReply(db, null, null, op.getReqId());
-            } catch (Exception e) {
-                log.error("Drop failed! " + e.getMessage());
+
+            if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+                sendAndWaitForReply(op);
+            } else {
+                sendQuery(op); //no need to wait for reply...
             }
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
@@ -842,9 +801,9 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             cmd.put("query", filter);
             op.setDoc(cmd);
 
-            sendQuery(op);
+
             try {
-                OpReply res = waitForReply(db, null, null, op.getReqId());
+                OpReply res = sendAndWaitForReply(op);
                 return Utils.getMap("result", res.getDocuments().get(0).get("values"));
             } catch (Exception e) {
                 log.error("did not get result", e);
@@ -885,9 +844,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             q.setInReplyTo(0);
 
             List<Map<String, Object>> ret;
-            sendQuery(q);
-
-            ret = readBatches(q.getReqId(), db, null, getMaxWriteBatchSize());
+            ret = readBatches(q, db, null, getMaxWriteBatchSize());
             return Utils.getMap("result", ret);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries()).get("result");
     }
@@ -918,9 +875,8 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             q.setInReplyTo(0);
 
             List<Map<String, Object>> ret;
-            sendQuery(q);
 
-            ret = readBatches(q.getReqId(), db, null, getMaxWriteBatchSize());
+            ret = readBatches(q, db, null, getMaxWriteBatchSize());
             return Utils.getMap("result", ret);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries()).get("result");
     }
@@ -958,16 +914,10 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             cmd.put("group", map);
 
             try {
-                sendQuery(q);
+                sendAndWaitForReply(q);
             } catch (MorphiumDriverException e) {
                 log.error("Sending of message failed: ", e);
                 return null;
-            }
-            //noinspection EmptyCatchBlock
-            try {
-                OpReply res = waitForReply(db, coll, query, q.getReqId());
-            } catch (MorphiumDriverException e) {
-
             }
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
@@ -992,8 +942,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
 
             q.setDoc(doc);
 
-            sendQuery(q);
-            List<Map<String, Object>> lst = readBatches(q.getReqId(), db, collection, getMaxWriteBatchSize());
+            List<Map<String, Object>> lst = readBatches(q, db, collection, getMaxWriteBatchSize());
             return Utils.getMap("result", lst);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries()).get("result");
     }
@@ -1070,4 +1019,8 @@ public class SingleConnectThreaddedDriver extends DriverBase {
 
     }
 
+
+    public static interface ReplyListener {
+        public void reply(OpReply r);
+    }
 }

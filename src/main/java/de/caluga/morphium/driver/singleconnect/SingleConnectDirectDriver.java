@@ -94,7 +94,7 @@ public class SingleConnectDirectDriver extends DriverBase {
     }
 
     @Override
-    protected OpReply getReply(long waitingFor, int timeout) throws MorphiumDriverException {
+    protected OpReply getReply(int waitingFor, int timeout) throws MorphiumDriverException {
         return getReply();
     }
 
