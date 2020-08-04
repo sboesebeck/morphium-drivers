@@ -1,5 +1,7 @@
 package de.caluga.morphium.driver.bson;
 
+import de.caluga.morphium.driver.MorphiumId;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.*;

@@ -2,6 +2,8 @@ package de.caluga.morphium.driver.bson;/**
  * Created by stephan on 29.10.15.
  */
 
+import de.caluga.morphium.driver.MorphiumId;
+
 import java.io.UnsupportedEncodingException;
 import java.util.*;
 import java.util.regex.Pattern;

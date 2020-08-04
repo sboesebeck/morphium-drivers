@@ -1,17 +1,18 @@
 package de.caluga.morphium.driver.meta;
 
-import de.caluga.morphium.Logger;
 import de.caluga.morphium.Morphium;
 import de.caluga.morphium.Utils;
-import de.caluga.morphium.constants.RunCommand;
 import de.caluga.morphium.driver.*;
 import de.caluga.morphium.driver.bulk.BulkRequestContext;
+import de.caluga.morphium.driver.constants.RunCommand;
 import de.caluga.morphium.driver.singleconnect.BulkContext;
 import de.caluga.morphium.driver.singleconnect.DriverBase;
 import de.caluga.morphium.driver.singleconnect.SingleConnectCursor;
 import de.caluga.morphium.driver.singleconnect.SingleConnectThreaddedDriver;
 import de.caluga.morphium.driver.wireprotocol.OpQuery;
 import de.caluga.morphium.driver.wireprotocol.OpReply;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,7 +30,7 @@ public class MetaDriver extends DriverBase {
     private static final ReadPreference secondaryPreferred = ReadPreference.secondaryPreferred();
     private static final ReadPreference primaryPreferred = ReadPreference.primaryPreferred();
     private static volatile long seq;
-    private final Logger log = new Logger(MetaDriver.class);
+    private final Logger log = LoggerFactory.getLogger(MetaDriver.class);
     private final Map<String, List<Connection>> connectionPool = new ConcurrentHashMap<>();
     private final Map<String, List<Connection>> connectionsInUse = new ConcurrentHashMap<>();
     private final List<String> secondaries = Collections.synchronizedList(new ArrayList<>());
@@ -64,7 +65,7 @@ public class MetaDriver extends DriverBase {
                 while (isConnected()) {
                     //noinspection EmptyCatchBlock
                     try {
-                        Thread.sleep(2500);
+                        Thread.sleep(1500);
                     } catch (InterruptedException e) {
                     }
 
@@ -512,6 +513,16 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
+    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+
+    }
+
+    @Override
+    public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+
+    }
+
+    @Override
     public MorphiumCursor nextIteration(MorphiumCursor crs) throws MorphiumDriverException {
         //Stay at the same connection
         SingleConnectCursor c = (SingleConnectCursor) crs.getInternalCursorObject();
@@ -585,7 +596,7 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public void store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
+    public Map<String, Object> store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
         Connection c = null;
         try {
             c = getConnection(primary);
@@ -598,6 +609,7 @@ public class MetaDriver extends DriverBase {
         } finally {
             freeConnection(c);
         }
+        return null;
     }
 
     @Override
@@ -849,6 +861,31 @@ public class MetaDriver extends DriverBase {
         }
     }
 
+    @Override
+    public void startTransaction() {
+
+    }
+
+    @Override
+    public void commitTransaction() {
+
+    }
+
+    @Override
+    public MorphiumTransactionContext getTransactionContext() {
+        return null;
+    }
+
+    @Override
+    public void setTransactionContext(MorphiumTransactionContext ctx) {
+
+    }
+
+    @Override
+    public void abortTransaction() {
+
+    }
+
     private DriverBase createAndConnectDriver(String host) throws MorphiumDriverException {
         DriverBase d = new SingleConnectThreaddedDriver();
         d.setHostSeed(host); //only connecting to one host
@@ -880,7 +917,7 @@ public class MetaDriver extends DriverBase {
                 if (!getConnections(host).isEmpty()) {
                     c = getConnections(host).remove(0); //get first available connection;
                     if (c == null) {
-                        log.fatal("Hä? could not get connection from pool");
+                        log.error("Hä? could not get connection from pool");
                     } else {
                         break;
                     }
@@ -968,7 +1005,7 @@ public class MetaDriver extends DriverBase {
                     return getMasterConnection();
                 }
             default:
-                log.fatal("Unknown read preference type! returning master!");
+                log.error("Unknown read preference type! returning master!");
                 return getMasterConnection();
         }
 

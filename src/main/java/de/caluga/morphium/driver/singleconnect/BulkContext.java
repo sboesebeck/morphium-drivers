@@ -51,7 +51,7 @@ public class BulkContext extends BulkRequestContext {
     }
 
     @Override
-    public InsertBulkRequest addInsertBulkReqpest(List<Map<String, Object>> toInsert) {
+    public InsertBulkRequest addInsertBulkRequest(List<Map<String, Object>> toInsert) {
         InsertBulkRequest in = new InsertBulkRequest(toInsert);
         addRequest(in);
         return in;

@@ -2,12 +2,13 @@ package bson;/**
  * Created by stephan on 28.10.15.
  */
 
-import de.caluga.morphium.Logger;
 import de.caluga.morphium.Utils;
+import de.caluga.morphium.driver.MorphiumId;
 import de.caluga.morphium.driver.bson.BsonDecoder;
 import de.caluga.morphium.driver.bson.BsonEncoder;
-import de.caluga.morphium.driver.bson.MorphiumId;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
@@ -17,7 +18,7 @@ import java.util.*;
  **/
 public class BsonTest extends BaseTest {
 
-    private static Logger log = new Logger(BsonTest.class);
+    private static Logger log = LoggerFactory.getLogger(BsonTest.class);
 
 
     @Test

@@ -1,12 +1,13 @@
 package de.caluga.morphium.driver.singleconnect;
 
-import de.caluga.morphium.Logger;
 import de.caluga.morphium.Morphium;
 import de.caluga.morphium.Utils;
-import de.caluga.morphium.driver.bulk.bson.MorphiumId;
+import de.caluga.morphium.driver.*;
 import de.caluga.morphium.driver.bulk.BulkRequestContext;
 import de.caluga.morphium.driver.wireprotocol.OpQuery;
 import de.caluga.morphium.driver.wireprotocol.OpReply;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,7 +25,7 @@ import java.util.stream.Collectors;
  */
 public class SingleConnectDirectDriver extends DriverBase {
 
-    private final Logger log = new Logger(SingleConnectThreaddedDriver.class);
+    private final Logger log = LoggerFactory.getLogger(SingleConnectThreaddedDriver.class);
     private Socket s;
     private OutputStream out;
     private InputStream in;
@@ -48,7 +49,7 @@ public class SingleConnectDirectDriver extends DriverBase {
             s = null;
             in = null;
             out = null;
-            log.fatal("Could not reconnect!", e);
+            log.error("Could not reconnect!", e);
         }
     }
 
@@ -68,11 +69,11 @@ public class SingleConnectDirectDriver extends DriverBase {
 
             try {
                 Map<String, Object> result = runCommand("local", Utils.getMap("isMaster", true));
-                log.info("Got result");
-                if (!result.get("ismaster").equals(true)) {
-                    close();
-                    throw new RuntimeException("Cannot run with secondary connection only!");
-                }
+                //log.info("Got result");
+//                if (!result.get("ismaster").equals(true)) {
+//                    close();
+//                    throw new RuntimeException("Cannot run with secondary connection only!");
+//                }
                 setReplicaSetName((String) result.get("setName"));
                 if (replSet != null && !replSet.equals(getReplicaSetName())) {
                     throw new MorphiumDriverException("Replicaset name is wrong - connected to " + getReplicaSetName() + " should be " + replSet);
@@ -463,6 +464,7 @@ public class SingleConnectDirectDriver extends DriverBase {
                 if (System.currentTimeMillis() - start > getMaxWaitTime()) {
                     throw new MorphiumDriverException("Could not send message! Timeout!");
                 }
+                q.setFlags(4); //slave ok
                 out.write(q.bytes());
                 out.flush();
                 retry = false;
@@ -537,7 +539,7 @@ public class SingleConnectDirectDriver extends DriverBase {
     }
 
     @Override
-    public void store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
+    public Map<String, Object> store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
         new NetworkCallHelper().doCall(() -> {
             List<Map<String, Object>> toInsert = new ArrayList<>();
             List<Map<String, Object>> toUpdate = new ArrayList<>();
@@ -568,7 +570,7 @@ public class SingleConnectDirectDriver extends DriverBase {
             }
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
-
+        return null;
     }
 
     @Override
@@ -753,7 +755,7 @@ public class SingleConnectDirectDriver extends DriverBase {
                 //noinspection EmptyCatchBlock
                 try {
                     OpReply res = waitForReply(db, null, null, op.getReqId());
-                    log.fatal("Need to implement distinct");
+                    log.error("Need to implement distinct");
                 } catch (Exception e) {
 
                 }
@@ -925,7 +927,7 @@ public class SingleConnectDirectDriver extends DriverBase {
                 return capped != null && capped.equals(true);
             }
         } catch (Exception e) {
-            log.error(e);
+            log.error("Error", e);
         }
         return false;
     }
@@ -962,5 +964,38 @@ public class SingleConnectDirectDriver extends DriverBase {
 
     }
 
+    @Override
+    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
 
+    }
+
+    @Override
+    public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+
+    }
+
+    @Override
+    public void startTransaction() {
+
+    }
+
+    @Override
+    public void commitTransaction() {
+
+    }
+
+    @Override
+    public MorphiumTransactionContext getTransactionContext() {
+        return null;
+    }
+
+    @Override
+    public void setTransactionContext(MorphiumTransactionContext ctx) {
+
+    }
+
+    @Override
+    public void abortTransaction() {
+
+    }
 }

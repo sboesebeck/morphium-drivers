@@ -2,7 +2,7 @@ package de.caluga.morphium.driver.wireprotocol;/**
  * Created by stephan on 04.11.15.
  */
 
-import de.caluga.morphium.driver.bulk.bson.BsonEncoder;
+import de.caluga.morphium.driver.bson.BsonEncoder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

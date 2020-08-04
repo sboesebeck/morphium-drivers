@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>de.caluga</groupId>
-    <artifactId>morphium</artifactId>
+    <artifactId>morphium-drivers</artifactId>
     <version>0.0.1-BETA1</version>
     <packaging>jar</packaging>
     <parent>
@@ -106,6 +106,16 @@
 
     <dependencies>
         <dependency>
+            <groupId>de.caluga</groupId>
+            <artifactId>morphium</artifactId>
+            <version>4.1.2</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.2.3</version>
+        </dependency>
+        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.11</version>
@@ -133,31 +143,13 @@
         <dependency>
             <groupId>org.mongodb</groupId>
             <artifactId>mongodb-driver</artifactId>
-            <version>3.4.3</version>
+            <version>3.12.5</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>com.googlecode.json-simple</groupId>
             <artifactId>json-simple</artifactId>
             <version>RELEASE</version>
-        </dependency>
-
-        <!-- for validation, we compile against the validation API -->
-        <!-- these classes are not needed at runtime but if they   -->
-        <!-- are present, validation will be applied.              -->
-
-        <dependency>
-            <groupId>javax.validation</groupId>
-            <artifactId>validation-api</artifactId>
-            <version>1.0.0.GA</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.hibernate</groupId>
-            <artifactId>hibernate-validator</artifactId>
-            <version>4.2.0.Final</version>
-            <scope>provided</scope>
         </dependency>
 
 	<dependency>

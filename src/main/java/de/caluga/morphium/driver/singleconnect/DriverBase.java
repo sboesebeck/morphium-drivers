@@ -1,11 +1,13 @@
 package de.caluga.morphium.driver.singleconnect;
 
-import de.caluga.morphium.Logger;
 import de.caluga.morphium.Utils;
-import de.caluga.morphium.driver.bulk.bson.MongoJSScript;
+import de.caluga.morphium.driver.*;
+import de.caluga.morphium.driver.bson.MongoJSScript;
 import de.caluga.morphium.driver.mongodb.Maximums;
 import de.caluga.morphium.driver.wireprotocol.OpQuery;
 import de.caluga.morphium.driver.wireprotocol.OpReply;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -22,7 +24,7 @@ import java.util.regex.Pattern;
  */
 @SuppressWarnings("WeakerAccess")
 public abstract class DriverBase implements MorphiumDriver {
-    private final Logger log = new Logger(DriverBase.class);
+    private final Logger log = LoggerFactory.getLogger(DriverBase.class);
     private volatile int rqid = 10000;
     private int maxWait = 1000;
     private boolean keepAlive = true;
@@ -656,9 +658,7 @@ public abstract class DriverBase implements MorphiumDriver {
                     if (reply.getDocuments().get(0).get("result") != null) {
                         //noinspection unchecked
                         for (Map<String, Object> d : (List<Map<String, Object>>) reply.getDocuments().get(0).get("result")) {
-                            if (!cb.incomingData(d, System.currentTimeMillis() - start)) {
-                                return null;
-                            }
+                            cb.incomingData(d, System.currentTimeMillis() - start);
                         }
                     }
                     log.error("did not get cursor. Data: " + Utils.toJsonString(reply.getDocuments().get(0)));
@@ -671,17 +671,13 @@ public abstract class DriverBase implements MorphiumDriver {
                     log.debug("Firstbatch...");
                     //noinspection unchecked
                     for (Map<String, Object> d : (List<Map<String, Object>>) cursor.get("firstBatch")) {
-                        if (!cb.incomingData(d, System.currentTimeMillis() - start)) {
-                            return null;
-                        }
+                        cb.incomingData(d, System.currentTimeMillis() - start);
                     }
                 } else if (cursor.get("nextBatch") != null) {
                     log.debug("NextBatch...");
                     //noinspection unchecked
                     for (Map<String, Object> d : (List<Map<String, Object>>) cursor.get("nextBatch")) {
-                        if (!cb.incomingData(d, System.currentTimeMillis() - start)) {
-                            return null;
-                        }
+                        cb.incomingData(d, System.currentTimeMillis() - start);
                     }
                 }
                 if (((Long) cursor.get("id")) != 0) {

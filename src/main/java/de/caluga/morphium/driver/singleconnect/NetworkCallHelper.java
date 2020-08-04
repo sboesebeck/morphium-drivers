@@ -2,10 +2,12 @@ package de.caluga.morphium.driver.singleconnect;/**
  * Created by stephan on 09.11.15.
  */
 
-import de.caluga.morphium.Logger;
+
 import de.caluga.morphium.driver.MorphiumDriverException;
 import de.caluga.morphium.driver.MorphiumDriverNetworkException;
 import de.caluga.morphium.driver.MorphiumDriverOperation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
@@ -15,7 +17,7 @@ import java.util.Map;
  **/
 @SuppressWarnings("WeakerAccess")
 public class NetworkCallHelper {
-    private final Logger logger = new Logger(NetworkCallHelper.class);
+    private final Logger logger = LoggerFactory.getLogger(NetworkCallHelper.class);
 
 
     public Map<String, Object> doCall(MorphiumDriverOperation r, int maxRetry, int sleep) throws MorphiumDriverException {

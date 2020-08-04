@@ -1,10 +1,11 @@
 package bson;
 
-import de.caluga.morphium.Logger;
 import de.caluga.morphium.Utils;
 import de.caluga.morphium.driver.wireprotocol.OpQuery;
 import de.caluga.morphium.driver.wireprotocol.OpReply;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -23,7 +24,7 @@ import java.util.Map;
 public class ConnectTest extends BaseTest {
     private static String[] chars = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F",};
 
-    private Logger log = new Logger(ConnectTest.class);
+    private Logger log = LoggerFactory.getLogger(ConnectTest.class);
 
     @Test
     public void testConnection() throws Exception {

@@ -2,18 +2,20 @@ package bson;/**
  * Created by stephan on 30.11.15.
  */
 
-import de.caluga.morphium.driver.bson.MorphiumId;
+import data.UncachedObject;
+import de.caluga.morphium.*;
+import de.caluga.morphium.driver.MorphiumId;
 import de.caluga.morphium.driver.bulk.BulkRequestContext;
-import de.caluga.morphium.driver.inmem.InMemoryDriver;
 import de.caluga.morphium.driver.meta.MetaDriver;
 import de.caluga.morphium.driver.mongodb.Driver;
 import de.caluga.morphium.driver.singleconnect.SingleConnectDirectDriver;
 import de.caluga.morphium.driver.singleconnect.SingleConnectThreaddedDriver;
 import de.caluga.morphium.driver.wireprotocol.OpQuery;
 import de.caluga.morphium.query.Query;
-import de.caluga.test.mongo.suite.data.UncachedObject;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -26,8 +28,8 @@ import java.util.logging.Level;
  **/
 public class MorphiumDriverSpeedTest {
 
-    private static int countObjs = 12000;
-    private Logger log = new Logger(MorphiumDriverSpeedTest.class);
+    private static int countObjs = 25000;
+    private Logger log = LoggerFactory.getLogger(MorphiumDriverSpeedTest.class);
 
     @BeforeClass
     public static void setup() {
@@ -118,18 +120,21 @@ public class MorphiumDriverSpeedTest {
         MorphiumConfig cfg = null;
 
         cfg = new MorphiumConfig("morphium_test", 100, 1000, 1000);
+        cfg.setMinConnectionsPerHost(5);
         cfg.addHostToSeed("localhost");
-        cfg.setReplicasetMonitoring(false);
+        cfg.setReplicasetMonitoring(true);
         cfg.setDriverClass(MetaDriver.class.getName());
-        cfg.setMaxWaitTime(30000);
-        cfg.setMaxWaitTime(30000);
+        cfg.setMaxWaitTime(3000);
         m = new Morphium(cfg);
         //        m.getDriver().connect();
         //        Thread.sleep(10000);
-        log.info("Testing with Metadriver:");
-        doTest(m);
-        doTest(m);
-
+        log.info("+++++++++++   ++++++    Testing with Metadriver:");
+        log.info("+++++++++++   ++++++    Testing with Metadriver:");
+        log.info("+++++++++++   ++++++    Testing with Metadriver:");
+        long tm = doTest(m);
+        tm += doTest(m);
+        tm += doTest(m);
+        log.info("===============> Testing with Metadriver: Average " + (tm / 3));
         m.close();
 
         cfg = new MorphiumConfig("morphium_test", 100, 1000, 1000);
@@ -140,10 +145,13 @@ public class MorphiumDriverSpeedTest {
         m = new Morphium(cfg);
         //        m.getDriver().connect();
         //        Thread.sleep(10000);
-        log.info("Testing with SingeConnect driver:");
-        doTest(m);
-        doTest(m);
-
+        log.info("+++++++++++   ++++++    Testing with SingeConnect driver:");
+        log.info("+++++++++++   ++++++    Testing with SingeConnect driver:");
+        log.info("+++++++++++   ++++++    Testing with SingeConnect driver:");
+        tm = doTest(m);
+        tm += doTest(m);
+        tm += doTest(m);
+        log.info("===============> Testing with SingeConnect driver Average: " + (tm / 3));
         m.close();
 
 
@@ -155,31 +163,27 @@ public class MorphiumDriverSpeedTest {
         m = new Morphium(cfg);
         //        m.getDriver().connect();
         //        Thread.sleep(10000);
-        log.info("Testing with SingeConnectDirect driver:");
-        doTest(m);
-        doTest(m);
-
+        log.info("+++++++++++   ++++++    Testing with SingeConnectDirect driver:");
+        log.info("+++++++++++   ++++++    Testing with SingeConnectDirect driver:");
+        log.info("+++++++++++   ++++++    Testing with SingeConnectDirect driver:");
+        tm = doTest(m);
+        tm += doTest(m);
+        tm += doTest(m);
+        log.info("===============> Testing with SingeConnectDirect driver Average: " + (tm / 3));
         m.close();
 
 
-        log.info("Testing with mongodb driver:");
+        log.info("+++++++++++   ++++++    Testing with mongodb driver:");
+        log.info("+++++++++++   ++++++    Testing with mongodb driver:");
+        log.info("+++++++++++   ++++++    Testing with mongodb driver:");
         cfg = new MorphiumConfig("morphium_test", 100, 1000, 1000);
         cfg.addHostToSeed("localhost");
         cfg.setReplicasetMonitoring(false);
         m = new Morphium(cfg);
-        doTest(m);
-        doTest(m);
-
-
-        cfg = new MorphiumConfig("morphium_test", 100, 1000, 1000);
-        cfg.setDriverClass(InMemoryDriver.class.getName());
-        cfg.addHostToSeed("localhost");
-        cfg.setReplicasetMonitoring(false);
-        m = new Morphium(cfg);
-        log.info("Testing with inMemory driver:");
-        doTest(m);
-        m.close();
-
+        tm = doTest(m);
+        tm += doTest(m);
+        tm += doTest(m);
+        log.info("===============> Testing with mongodb driver Average: " + (tm / 3));
     }
 
 
@@ -237,9 +241,10 @@ public class MorphiumDriverSpeedTest {
 
     }
 
-    public void doTest(Morphium m) throws Exception {
-        long totalTime = System.currentTimeMillis();
+    public long doTest(Morphium m) throws Exception {
         m.dropCollection(UncachedObject.class);
+        Thread.sleep(100);
+        long totalTime = System.currentTimeMillis();
         long start = System.currentTimeMillis();
         List<UncachedObject> lst = new ArrayList<>();
         for (int i = 0; i < countObjs; i++) {
@@ -249,15 +254,17 @@ public class MorphiumDriverSpeedTest {
             lst.add(uc);
         }
         m.storeList(lst);
-        Thread.sleep(100);
         long dur = System.currentTimeMillis() - start;
         log.info("Write Took:  " + dur);
 
+        //waiting for persitence
+        long c = 0;
         start = System.currentTimeMillis();
-        long c = m.createQueryFor(UncachedObject.class).countAll();
-        dur = System.currentTimeMillis() - start;
+        while (c < countObjs) {
+            c = m.createQueryFor(UncachedObject.class).countAll();
+            dur = System.currentTimeMillis() - start;
+        }
         log.info("Count took:  " + dur);
-        assert (c == countObjs);
         //        log.info("Counter=="+c);
 
         start = System.currentTimeMillis();
@@ -275,13 +282,14 @@ public class MorphiumDriverSpeedTest {
         long count = m.createQueryFor(UncachedObject.class).countAll();
         dur = System.currentTimeMillis() - start;
         log.info("count took:  " + dur);
-        assert (count == countObjs - 1);
+        assert (count >= countObjs - 1) : "Count wrong: " + count + " vs " + countObjs;
         start = System.currentTimeMillis();
         count = m.createQueryFor(UncachedObject.class).countAll();
         dur = System.currentTimeMillis() - start;
         log.info("count took:  " + dur);
         totalTime = System.currentTimeMillis() - totalTime;
         log.info(" ====> In Total " + totalTime + "ms\n");
+        return totalTime;
     }
 
     @Test
@@ -298,7 +306,7 @@ public class MorphiumDriverSpeedTest {
             UncachedObject uc = new UncachedObject();
             uc.setCounter(i);
             uc.setValue("V:" + i);
-            lst.add(new ObjectMapperImpl().marshall(uc));
+            lst.add(new ObjectMapperImpl().serialize(uc));
         }
         drv.insert("morphium_test", "tst", lst, null);
 
@@ -342,7 +350,7 @@ public class MorphiumDriverSpeedTest {
             UncachedObject uc = new UncachedObject();
             uc.setCounter(i);
             uc.setValue("V:" + i);
-            lst.add(new ObjectMapperImpl().marshall(uc));
+            lst.add(new ObjectMapperImpl().serialize(uc));
         }
         drv.insert("morphium_test", "tst", lst, null);
 
@@ -472,9 +480,9 @@ public class MorphiumDriverSpeedTest {
             UncachedObject uc = new UncachedObject();
             uc.setCounter(i);
             uc.setValue("V:" + i);
-            lst.add(new ObjectMapperImpl().marshall(uc));
+            lst.add(new ObjectMapperImpl().serialize(uc));
         }
-        op.addInsertBulkReqpest(lst);
+        op.addInsertBulkRequest(lst);
         op.execute();
         Thread.sleep(1000);
     }

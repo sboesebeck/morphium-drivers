@@ -2,13 +2,14 @@ package de.caluga.morphium.driver.singleconnect;/**
  * Created by stephan on 30.11.15.
  */
 
-import de.caluga.morphium.Logger;
 import de.caluga.morphium.Morphium;
 import de.caluga.morphium.Utils;
-import de.caluga.morphium.driver.bulk.bson.MorphiumId;
+import de.caluga.morphium.driver.*;
 import de.caluga.morphium.driver.bulk.BulkRequestContext;
 import de.caluga.morphium.driver.wireprotocol.OpQuery;
 import de.caluga.morphium.driver.wireprotocol.OpReply;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,8 +23,8 @@ import java.util.stream.Collectors;
  **/
 public class SingleConnectThreaddedDriver extends DriverBase {
 
-    private final List<OpReply> replies = Collections.synchronizedList(new ArrayList<>());
-    private final Logger log = new Logger(SingleConnectThreaddedDriver.class);
+    private final List<OpReply> replies = new ArrayList<>();
+    private final Logger log = LoggerFactory.getLogger(SingleConnectThreaddedDriver.class);
     private Socket s;
     private OutputStream out;
     private InputStream in;
@@ -172,7 +173,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 Map<String, Object> result = runCommand("local", Utils.getMap("isMaster", true));
                 //                log.info("Got result");
                 if (result == null) {
-                    log.fatal("Could not run ismaster!!!! result is null");
+                    log.error("Could not run ismaster!!!! result is null");
                     throw new RuntimeException("Connect failed!");
                 }
                 setReplicaSetName((String) result.get("setName"));
@@ -336,6 +337,16 @@ public class SingleConnectThreaddedDriver extends DriverBase {
         crs.setInternalCursorObject(internalCursorData);
         return crs;
 
+
+    }
+
+    @Override
+    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+
+    }
+
+    @Override
+    public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
 
     }
 
@@ -620,8 +631,8 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
-    public void store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
-        new NetworkCallHelper().doCall(() -> {
+    public Map<String, Object> store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
+        return new NetworkCallHelper().doCall(() -> {
             List<Map<String, Object>> toInsert = new ArrayList<>();
             List<Map<String, Object>> toUpdate = new ArrayList<>();
             List<Map<String, Object>> update = new ArrayList<>();
@@ -651,7 +662,6 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             }
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
-
     }
 
     @Override
@@ -837,7 +847,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 OpReply res = waitForReply(db, null, null, op.getReqId());
                 return Utils.getMap("result", res.getDocuments().get(0).get("values"));
             } catch (Exception e) {
-                log.fatal("did not get result", e);
+                log.error("did not get result", e);
             }
 
             return null;
@@ -998,7 +1008,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 return capped != null && capped.equals(true);
             }
         } catch (Exception e) {
-            log.error(e);
+            log.error("error", e);
         }
         return false;
     }
@@ -1032,6 +1042,31 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             runCommand(db, cmd);
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
+
+    }
+
+    @Override
+    public void startTransaction() {
+
+    }
+
+    @Override
+    public void commitTransaction() {
+
+    }
+
+    @Override
+    public MorphiumTransactionContext getTransactionContext() {
+        return null;
+    }
+
+    @Override
+    public void setTransactionContext(MorphiumTransactionContext ctx) {
+
+    }
+
+    @Override
+    public void abortTransaction() {
 
     }
 
