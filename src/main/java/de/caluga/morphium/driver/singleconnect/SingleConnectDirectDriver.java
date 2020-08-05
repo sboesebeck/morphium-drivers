@@ -477,6 +477,12 @@ public class SingleConnectDirectDriver extends DriverBase {
     }
 
     @Override
+    public OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException {
+        sendQuery(q);
+        return getReply(q.getReqId(), getMaxWaitTime());
+    }
+
+    @Override
     public long count(String db, String collection, Map<String, Object> query, ReadPreference rp) throws MorphiumDriverException {
         Map<String, Object> ret = new NetworkCallHelper().doCall(() -> {
             OpQuery q = new OpQuery();

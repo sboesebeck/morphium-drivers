@@ -563,6 +563,8 @@ public abstract class DriverBase implements MorphiumDriver {
 
     protected abstract void sendQuery(OpQuery q) throws MorphiumDriverException;
 
+    public abstract OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException;
+
     protected abstract OpReply getReply(int waitingFor, int timeout) throws MorphiumDriverException;
 
 
@@ -637,7 +639,6 @@ public abstract class DriverBase implements MorphiumDriver {
 
             long start = System.currentTimeMillis();
             List<Map<String, Object>> ret = null;
-            sendQuery(q);
 
             OpReply reply;
             int waitingfor = q.getReqId();
@@ -646,11 +647,8 @@ public abstract class DriverBase implements MorphiumDriver {
 
             while (true) {
                 log.debug("reading result");
-                reply = getReply(waitingfor, t);
+                reply = sendAndWaitForReply(q);
 
-                if (reply.getInReplyTo() != waitingfor) {
-                    throw new MorphiumDriverNetworkException("Wrong answer - waiting for " + waitingfor + " but got " + reply.getInReplyTo());
-                }
                 @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocuments().get(0).get("cursor");
                 if (cursor == null) {
                     log.debug("no-cursor result");

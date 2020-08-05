@@ -1049,6 +1049,11 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
+    public OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
     protected OpReply getReply(int waitingFor, int timeout) throws MorphiumDriverException {
         return null;
     }

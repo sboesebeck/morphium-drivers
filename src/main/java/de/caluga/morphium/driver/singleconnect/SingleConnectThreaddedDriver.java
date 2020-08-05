@@ -268,7 +268,8 @@ public class SingleConnectThreaddedDriver extends DriverBase {
 
     }
 
-    private OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException {
+    @Override
+    public OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException {
         final OpReply[] rep = new OpReply[1];
         ReplyListener rl = (r) -> {
             rep[0] = r;
