@@ -2,7 +2,6 @@ package de.caluga.morphium.driver.singleconnect;
 
 import de.caluga.morphium.Utils;
 import de.caluga.morphium.driver.*;
-import de.caluga.morphium.driver.bson.MongoJSScript;
 import de.caluga.morphium.driver.mongodb.Maximums;
 import de.caluga.morphium.driver.wireprotocol.OpQuery;
 import de.caluga.morphium.driver.wireprotocol.OpReply;
@@ -61,6 +60,92 @@ public abstract class DriverBase implements MorphiumDriver {
 
     public void setSlaveOk(boolean slaveOk) {
         this.slaveOk = slaveOk;
+    }
+
+    @Override
+    public String getAtlasUrl() {
+        return null;
+    }
+
+    @Override
+    public void setAtlasUrl(String atlasUrl) {
+
+    }
+
+    @Override
+    public int getMaxConnections() {
+        return 0;
+    }
+
+    @Override
+    public void setMaxConnections(int maxConnections) {
+
+    }
+
+    @Override
+    public int getMinConnections() {
+        return 0;
+    }
+
+    @Override
+    public void setMinConnections(int minConnections) {
+
+    }
+
+    @Override
+    public boolean isRetryReads() {
+        return false;
+    }
+
+    @Override
+    public void setRetryReads(boolean retryReads) {
+
+    }
+
+    @Override
+    public boolean isRetryWrites() {
+        return false;
+    }
+
+    @Override
+    public void setRetryWrites(boolean retryWrites) {
+
+    }
+
+    @Override
+    public String getUuidRepresentation() {
+        return null;
+    }
+
+    @Override
+    public void setUuidRepresentation(String uuidRepresentation) {
+
+    }
+
+    @Override
+    public int getReadTimeout() {
+        return 0;
+    }
+
+    @Override
+    public void setReadTimeout(int readTimeout) {
+
+    }
+
+    public int getMinConnectionsPerHost() {
+        return minConnectionsPerHost;
+    }
+
+    public void setMinConnectionsPerHost(int minConnectionsPerHost) {
+        this.minConnectionsPerHost = minConnectionsPerHost;
+    }
+
+    public int getMaxConnectionsPerHost() {
+        return maxConnectionsPerHost;
+    }
+
+    public void setMaxConnectionsPerHost(int maxConnectionsPerHost) {
+        this.maxConnectionsPerHost = maxConnectionsPerHost;
     }
 
     @Override
@@ -244,15 +329,6 @@ public abstract class DriverBase implements MorphiumDriver {
         defaultWriteTimeout = wt;
     }
 
-    @Override
-    public int getHeartbeatConnectTimeout() {
-        return heartbeatConnectionTimeout;
-    }
-
-    @Override
-    public void setHeartbeatConnectTimeout(int heartbeatConnectTimeout) {
-        heartbeatConnectionTimeout = heartbeatConnectTimeout;
-    }
 
     @Override
     public int getMaxWaitTime() {
@@ -264,15 +340,7 @@ public abstract class DriverBase implements MorphiumDriver {
         this.maxWait = maxWaitTime;
     }
 
-    @Override
-    public boolean isSocketKeepAlive() {
-        return keepAlive;
-    }
 
-    @Override
-    public void setSocketKeepAlive(boolean socketKeepAlive) {
-        keepAlive = socketKeepAlive;
-    }
 
     @Override
     public String[] getCredentials(String db) {
@@ -311,25 +379,6 @@ public abstract class DriverBase implements MorphiumDriver {
 
     }
 
-    @Override
-    public int getMaxConnectionsPerHost() {
-        return maxConnectionsPerHost;
-    }
-
-    @Override
-    public void setMaxConnectionsPerHost(int mx) {
-        maxConnectionsPerHost = mx;
-    }
-
-    @Override
-    public int getMinConnectionsPerHost() {
-        return minConnectionsPerHost;
-    }
-
-    @Override
-    public void setMinConnectionsPerHost(int mx) {
-        minConnectionsPerHost = mx;
-    }
 
     @Override
     public int getMaxConnectionLifetime() {
@@ -351,15 +400,6 @@ public abstract class DriverBase implements MorphiumDriver {
         maxConnectionIdleTime = time;
     }
 
-    @Override
-    public int getSocketTimeout() {
-        return soTimeout;
-    }
-
-    @Override
-    public void setSocketTimeout(int timeout) {
-        soTimeout = timeout;
-    }
 
     @Override
     public int getConnectionTimeout() {
@@ -381,10 +421,6 @@ public abstract class DriverBase implements MorphiumDriver {
         defaultW = w;
     }
 
-    @Override
-    public int getMaxBlockintThreadMultiplier() {
-        return maxBlockingThreadsMultiplier;
-    }
 
     @Override
     public int getHeartbeatFrequency() {
@@ -422,16 +458,6 @@ public abstract class DriverBase implements MorphiumDriver {
     }
 
     @Override
-    public int getHeartbeatSocketTimeout() {
-        return heartbeatSocketTimeout;
-    }
-
-    @Override
-    public void setHeartbeatSocketTimeout(int heartbeatSocketTimeout) {
-        this.heartbeatSocketTimeout = heartbeatSocketTimeout;
-    }
-
-    @Override
     public boolean isUseSSL() {
         return useSSL;
     }
@@ -451,15 +477,6 @@ public abstract class DriverBase implements MorphiumDriver {
         defaultJ = j;
     }
 
-    @Override
-    public int getWriteTimeout() {
-        return defaultWriteTimeout;
-    }
-
-    @Override
-    public void setWriteTimeout(int writeTimeout) {
-
-    }
 
     @Override
     public int getLocalThreshold() {
@@ -471,20 +488,12 @@ public abstract class DriverBase implements MorphiumDriver {
         localThreshold = thr;
     }
 
-    @Override
-    public void setMaxBlockingThreadMultiplier(int m) {
-        maxBlockingThreadsMultiplier = m;
-    }
 
     @Override
     public void heartBeatFrequency(int t) {
         heartbeatFrequency = t;
     }
 
-    @Override
-    public void heartBeatSocketTimeout(int t) {
-        heartbeatSocketTimeout = t;
-    }
 
     @Override
     public void useSsl(boolean ssl) {
@@ -497,69 +506,69 @@ public abstract class DriverBase implements MorphiumDriver {
         String h = hst[0];
         int port = 27017;
         if (hst.length > 1) {
-            port = Integer.valueOf(hst[1]);
+            port = Integer.parseInt(hst[1]);
         }
         InetAddress in = InetAddress.getByName(h);
         return in.getHostAddress() + ":" + port;
     }
 
+//
+//    @Override
+//    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing, Map<String, Object> query) throws MorphiumDriverException {
+//        return mapReduce(db, collection, mapping, reducing, query, null);
+//    }
+//
+//    @Override
+//    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing) throws MorphiumDriverException {
+//        return mapReduce(db, collection, mapping, reducing, null, null);
+//    }
 
-    @Override
-    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing, Map<String, Object> query) throws MorphiumDriverException {
-        return mapReduce(db, collection, mapping, reducing, query, null);
-    }
-
-    @Override
-    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing) throws MorphiumDriverException {
-        return mapReduce(db, collection, mapping, reducing, null, null);
-    }
-
-    @Override
-    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing, Map<String, Object> query, Map<String, Object> sorting) throws MorphiumDriverException {
-        Map<String, Object> cmd = new LinkedHashMap<>();
-        /*
-         mapReduce: <collection>,
-                 map: <function>,
-                 reduce: <function>,
-                 finalize: <function>,
-                 out: <output>,
-                 query: <document>,
-                 sort: <document>,
-                 limit: <number>,
-                 scope: <document>,
-                 jsMode: <boolean>,
-                 verbose: <boolean>,
-                 bypassDocumentValidation: <boolean>
-         */
-
-        cmd.put("mapReduce", collection);
-        cmd.put("map", new MongoJSScript(mapping));
-        cmd.put("reduce", new MongoJSScript(reducing));
-        cmd.put("out", Utils.getMap("inline", 1));
-        if (query != null) {
-            cmd.put("query", query);
-        }
-        if (sorting != null) {
-            cmd.put("sort", sorting);
-        }
-        Map<String, Object> result = runCommand(db, cmd);
-        if (result == null) {
-            throw new MorphiumDriverException("Could not get proper result");
-        }
-        @SuppressWarnings("unchecked") List<Map<String, Object>> results = (List<Map<String, Object>>) result.get("results");
-        if (results == null) {
-            return new ArrayList<>();
-        }
-
-
-        ArrayList<Map<String, Object>> ret = new ArrayList<>();
-        for (Map<String, Object> d : results) {
-            @SuppressWarnings("unchecked") Map<String, Object> value = (Map) d.get("value");
-            ret.add(value);
-        }
-
-        return ret;
-    }
+//    @Override
+//    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing, Map<String, Object> query, Map<String, Object> sorting) throws MorphiumDriverException {
+//        Map<String, Object> cmd = new LinkedHashMap<>();
+//        /*
+//         mapReduce: <collection>,
+//                 map: <function>,
+//                 reduce: <function>,
+//                 finalize: <function>,
+//                 out: <output>,
+//                 query: <document>,
+//                 sort: <document>,
+//                 limit: <number>,
+//                 scope: <document>,
+//                 jsMode: <boolean>,
+//                 verbose: <boolean>,
+//                 bypassDocumentValidation: <boolean>
+//         */
+//
+//        cmd.put("mapReduce", collection);
+//        cmd.put("map", new MongoJSScript(mapping));
+//        cmd.put("reduce", new MongoJSScript(reducing));
+//        cmd.put("out", Utils.getMap("inline", 1));
+//        if (query != null) {
+//            cmd.put("query", query);
+//        }
+//        if (sorting != null) {
+//            cmd.put("sort", sorting);
+//        }
+//        Map<String, Object> result = runCommand(db, cmd);
+//        if (result == null) {
+//            throw new MorphiumDriverException("Could not get proper result");
+//        }
+//        @SuppressWarnings("unchecked") List<Map<String, Object>> results = (List<Map<String, Object>>) result.get("results");
+//        if (results == null) {
+//            return new ArrayList<>();
+//        }
+//
+//
+//        ArrayList<Map<String, Object>> ret = new ArrayList<>();
+//        for (Map<String, Object> d : results) {
+//            @SuppressWarnings("unchecked") Map<String, Object> value = (Map) d.get("value");
+//            ret.add(value);
+//        }
+//
+//        return ret;
+//    }
 
     protected abstract void sendQuery(OpQuery q) throws MorphiumDriverException;
 

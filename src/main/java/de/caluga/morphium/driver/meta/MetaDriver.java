@@ -1,5 +1,9 @@
 package de.caluga.morphium.driver.meta;
 
+import com.mongodb.event.ClusterListener;
+import com.mongodb.event.CommandListener;
+import com.mongodb.event.ConnectionPoolListener;
+import de.caluga.morphium.Collation;
 import de.caluga.morphium.Morphium;
 import de.caluga.morphium.Utils;
 import de.caluga.morphium.driver.*;
@@ -14,6 +18,7 @@ import de.caluga.morphium.driver.wireprotocol.OpReply;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -469,6 +474,11 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
+    public Map<String, Object> getCollStats(String db, String coll) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
     public Map<String, Object> getOps(long threshold) throws MorphiumDriverException {
         Connection c = null;
         try {
@@ -501,21 +511,27 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public MorphiumCursor initIteration(String db, String collection, Map<String, Object> query, Map<String, Integer> sort, Map<String, Object> projection, int skip, int limit, int batchSize, ReadPreference readPreference, Map<String, Object> findMetaData) throws MorphiumDriverException {
+    public MorphiumCursor initAggregationIteration(String db, String collection, List<Map<String, Object>> aggregationPipeline, ReadPreference readPreference, Collation collation, int batchSize, Map<String, Object> findMetaData) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public MorphiumCursor initIteration(String db, String collection, Map<String, Object> query, Map<String, Integer> sort, Map<String, Object> projection, int skip, int limit, int batchSize, ReadPreference readPreference, Collation collation, Map<String, Object> findMetaData) throws MorphiumDriverException {
         Connection c = getConnection(readPreference);
-        return c.getD().initIteration(db, collection, query, sort, projection, skip, limit, batchSize, readPreference, findMetaData);
+        return c.getD().initIteration(db, collection, query, sort, projection, skip, limit, batchSize, readPreference, collation, findMetaData);
 
     }
 
     @Override
-    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
 
     }
 
     @Override
-    public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+    public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
 
     }
+
 
     @Override
     public MorphiumCursor nextIteration(MorphiumCursor crs) throws MorphiumDriverException {
@@ -543,11 +559,11 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public List<Map<String, Object>> find(String db, String collection, Map<String, Object> query, Map<String, Integer> sort, Map<String, Object> projection, int skip, int limit, int batchSize, ReadPreference rp, Map<String, Object> findMetaData) throws MorphiumDriverException {
+    public List<Map<String, Object>> find(String db, String collection, Map<String, Object> query, Map<String, Integer> sort, Map<String, Object> projection, int skip, int limit, int batchSize, ReadPreference rp, Collation collation, Map<String, Object> findMetaData) throws MorphiumDriverException {
         Connection c = null;
         try {
             c = getConnection(rp);
-            return c.getD().find(db, collection, query, sort, projection, skip, limit, batchSize, rp, findMetaData);
+            return c.getD().find(db, collection, query, sort, projection, skip, limit, batchSize, rp, collation, findMetaData);
         } catch (MorphiumDriverNetworkException ex) {
             if (c != null) {
                 incErrorCount(c.getHost());
@@ -559,11 +575,11 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public long count(String db, String collection, Map<String, Object> query, ReadPreference rp) throws MorphiumDriverException {
+    public long count(String db, String collection, Map<String, Object> query, Collation collation, ReadPreference rp) throws MorphiumDriverException {
         Connection c = null;
         try {
             c = getConnection(rp);
-            return c.getD().count(db, collection, query, rp);
+            return c.getD().count(db, collection, query, collation, rp);
         } catch (MorphiumDriverNetworkException ex) {
             if (c != null) {
                 incErrorCount(c.getHost());
@@ -572,6 +588,11 @@ public class MetaDriver extends DriverBase {
         } finally {
             freeConnection(c);
         }
+    }
+
+    @Override
+    public long estimatedDocumentCount(String db, String collection, ReadPreference rp) {
+        return 0;
     }
 
     @Override
@@ -591,7 +612,7 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public Map<String, Object> store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
+    public Map<String, Integer> store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
         Connection c = null;
         try {
             c = getConnection(primary);
@@ -624,11 +645,11 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public Map<String, Object> update(String db, String collection, Map<String, Object> query, Map<String, Object> op, boolean multiple, boolean upsert, WriteConcern wc) throws MorphiumDriverException {
+    public Map<String, Object> update(String db, String collection, Map<String, Object> query, Map<String, Object> op, boolean multiple, boolean upsert, Collation collation, WriteConcern wc) throws MorphiumDriverException {
         Connection c = null;
         try {
             c = getConnection(primary);
-            return c.getD().update(db, collection, query, op, multiple, upsert, wc);
+            return c.getD().update(db, collection, query, op, multiple, upsert, collation, wc);
         } catch (MorphiumDriverNetworkException ex) {
             if (c != null) {
                 incErrorCount(c.getHost());
@@ -640,11 +661,11 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public Map<String, Object> delete(String db, String collection, Map<String, Object> query, boolean multiple, WriteConcern wc) throws MorphiumDriverException {
+    public Map<String, Object> delete(String db, String collection, Map<String, Object> query, boolean multiple, Collation collation, WriteConcern wc) throws MorphiumDriverException {
         Connection c = null;
         try {
             c = getConnection(primary);
-            return c.getD().delete(db, collection, query, multiple, wc);
+            return c.getD().delete(db, collection, query, multiple, collation, wc);
         } catch (MorphiumDriverNetworkException ex) {
             if (c != null) {
                 incErrorCount(c.getHost());
@@ -706,11 +727,11 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public List<Object> distinct(String db, String collection, String field, Map<String, Object> filter, ReadPreference rp) throws MorphiumDriverException {
+    public List<Object> distinct(String db, String collection, String field, Map<String, Object> filter, Collation collation, ReadPreference rp) throws MorphiumDriverException {
         Connection c = null;
         try {
             c = getConnection(primaryPreferred);
-            return c.getD().distinct(db, collection, field, filter, rp);
+            return c.getD().distinct(db, collection, field, filter, collation, rp);
         } catch (MorphiumDriverNetworkException ex) {
             if (c != null) {
                 incErrorCount(c.getHost());
@@ -770,20 +791,18 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public Map<String, Object> group(String db, String coll, Map<String, Object> query, Map<String, Object> initial, String jsReduce, String jsFinalize, ReadPreference rp, String... keys) throws MorphiumDriverException {
-        Connection c = null;
-        try {
-            c = getConnection(rp);
-            return c.getD().group(db, coll, query, initial, jsReduce, jsFinalize, rp, keys);
-        } catch (MorphiumDriverNetworkException ex) {
-            if (c != null) {
-                incErrorCount(c.getHost());
-            }
-            throw ex;
-        } finally {
-            freeConnection(c);
-        }
+    public Map<String, Object> findAndOneAndDelete(String db, String col, Map<String, Object> query, Map<String, Integer> sort, Collation collation) throws MorphiumDriverException {
+        return null;
+    }
 
+    @Override
+    public Map<String, Object> findAndOneAndUpdate(String db, String col, Map<String, Object> query, Map<String, Object> update, Map<String, Integer> sort, Collation collation) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public Map<String, Object> findAndOneAndReplace(String db, String col, Map<String, Object> query, Map<String, Object> replacement, Map<String, Integer> sort, Collation collation) throws MorphiumDriverException {
+        return null;
     }
 
     @Override
@@ -803,11 +822,11 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
-    public List<Map<String, Object>> aggregate(String db, String collection, List<Map<String, Object>> pipeline, boolean explain, boolean allowDiskUse, ReadPreference readPreference) throws MorphiumDriverException {
+    public List<Map<String, Object>> aggregate(String db, String collection, List<Map<String, Object>> pipeline, boolean explain, boolean allowDiskUse, Collation collation, ReadPreference readPreference) throws MorphiumDriverException {
         Connection c = null;
         try {
             c = getConnection(readPreference);
-            return c.getD().aggregate(db, collection, pipeline, explain, allowDiskUse, readPreference);
+            return c.getD().aggregate(db, collection, pipeline, explain, allowDiskUse, collation, readPreference);
         } catch (MorphiumDriverNetworkException ex) {
             if (c != null) {
                 incErrorCount(c.getHost());
@@ -816,6 +835,16 @@ public class MetaDriver extends DriverBase {
         } finally {
             freeConnection(c);
         }
+
+    }
+
+    @Override
+    public int getServerSelectionTimeout() {
+        return 0;
+    }
+
+    @Override
+    public void setServerSelectionTimeout(int serverSelectionTimeout) {
 
     }
 
@@ -857,6 +886,51 @@ public class MetaDriver extends DriverBase {
     }
 
     @Override
+    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing, Map<String, Object> query) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing, Map<String, Object> query, Map<String, Object> sorting, Collation collation) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public void addCommandListener(CommandListener cmd) {
+
+    }
+
+    @Override
+    public void removeCommandListener(CommandListener cmd) {
+
+    }
+
+    @Override
+    public void addClusterListener(ClusterListener cl) {
+
+    }
+
+    @Override
+    public void removeClusterListener(ClusterListener cl) {
+
+    }
+
+    @Override
+    public void addConnectionPoolListener(ConnectionPoolListener cpl) {
+
+    }
+
+    @Override
+    public void removeConnectionPoolListener(ConnectionPoolListener cpl) {
+
+    }
+
+    @Override
     public void startTransaction() {
 
     }
@@ -881,11 +955,29 @@ public class MetaDriver extends DriverBase {
 
     }
 
+    @Override
+    public SSLContext getSslContext() {
+        return null;
+    }
+
+    @Override
+    public void setSslContext(SSLContext sslContext) {
+
+    }
+
+    @Override
+    public boolean isSslInvalidHostNameAllowed() {
+        return false;
+    }
+
+    @Override
+    public void setSslInvalidHostNameAllowed(boolean sslInvalidHostNameAllowed) {
+
+    }
+
     private DriverBase createAndConnectDriver(String host) throws MorphiumDriverException {
         DriverBase d = new SingleConnectThreaddedDriver();
         d.setHostSeed(host); //only connecting to one host
-        d.setSocketKeepAlive(isSocketKeepAlive());
-        d.setSocketTimeout(getSocketTimeout());
         d.setConnectionTimeout(getConnectionTimeout());
         d.setDefaultWriteTimeout(getDefaultWriteTimeout());
         d.setSleepBetweenErrorRetries(getSleepBetweenErrorRetries());

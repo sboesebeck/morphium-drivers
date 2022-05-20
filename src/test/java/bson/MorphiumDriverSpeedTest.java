@@ -7,7 +7,6 @@ import de.caluga.morphium.*;
 import de.caluga.morphium.driver.MorphiumId;
 import de.caluga.morphium.driver.bulk.BulkRequestContext;
 import de.caluga.morphium.driver.meta.MetaDriver;
-import de.caluga.morphium.driver.mongodb.Driver;
 import de.caluga.morphium.driver.singleconnect.SingleConnectDirectDriver;
 import de.caluga.morphium.driver.singleconnect.SingleConnectThreaddedDriver;
 import de.caluga.morphium.driver.wireprotocol.OpQuery;
@@ -28,7 +27,7 @@ import java.util.logging.Level;
  **/
 public class MorphiumDriverSpeedTest {
 
-    private static int countObjs = 25000;
+    private static int countObjs = 25;
     private Logger log = LoggerFactory.getLogger(MorphiumDriverSpeedTest.class);
 
     @BeforeClass
@@ -121,7 +120,7 @@ public class MorphiumDriverSpeedTest {
         MorphiumConfig cfg = null;
 
         cfg = new MorphiumConfig("morphium_test", 100, 1000, 1000);
-        cfg.setMinConnectionsPerHost(5);
+        cfg.setMaxConnections(5);
         cfg.addHostToSeed("localhost");
         cfg.setReplicasetMonitoring(false);
         cfg.setDriverClass(MetaDriver.class.getName());
@@ -145,7 +144,7 @@ public class MorphiumDriverSpeedTest {
         MorphiumConfig cfg = null;
 
         cfg = new MorphiumConfig("morphium_test", 100, 1000, 1000);
-        cfg.setMinConnectionsPerHost(5);
+        cfg.setMaxConnections(5);
         cfg.addHostToSeed("localhost");
         cfg.setReplicasetMonitoring(false);
         cfg.setDriverClass(MetaDriver.class.getName());
@@ -335,36 +334,36 @@ public class MorphiumDriverSpeedTest {
 
         drv.drop("morphium_test", "tst", null);
         long start = System.currentTimeMillis();
-
+        MorphiumObjectMapper objectMapper = new ObjectMapperImpl();
         List<Map<String, Object>> lst = new ArrayList<>();
         for (int i = 0; i < countObjs; i++) {
             UncachedObject uc = new UncachedObject();
             uc.setCounter(i);
             uc.setValue("V:" + i);
-            lst.add(new ObjectMapperImpl().serialize(uc));
+            lst.add(objectMapper.serialize(uc));
         }
         drv.insert("morphium_test", "tst", lst, null);
 
         //        Thread.sleep(1000);
 
-        lst = drv.find("morphium_test", "tst", new HashMap<>(), null, null, 0, 0, 1000, null, null);
+        lst = drv.find("morphium_test", "tst", new HashMap<>(), null, null, 0, 0, 1000, null, null, null);
         log.info("List: " + lst.size());
         assert (lst.size() == countObjs);
 
-        drv.delete("morphium_test", "tst", Utils.getMap("counter", 100), false, null);
-        //        Thread.sleep(1000);
-        lst = drv.find("morphium_test", "tst", new HashMap<>(), null, null, 0, 0, 1000, null, null);
+        drv.delete("morphium_test", "tst", Utils.getMap("counter", 100), false, null, null);
+        Thread.sleep(1000);
+        lst = drv.find("morphium_test", "tst", new HashMap<>(), null, null, 0, 0, 1000, null, null, null);
         assert (lst.size() != countObjs) : "Size is still " + lst.size();
         assert (lst.size() == countObjs - 1) : "Size is not correct " + lst.size();
 
-        long c = drv.count("morphium_test", "tst", new HashMap<>(), null);
+        long c = drv.count("morphium_test", "tst", new HashMap<>(), null, null);
         assert (c == countObjs - 1) : "Count wrong: " + c;
 
 
-        lst = drv.find("morphium_test", "tst", Utils.getMap("counter", Utils.getMap("$lt", 10)), null, null, 0, 0, 1000, null, null);
+        lst = drv.find("morphium_test", "tst", Utils.getMap("counter", Utils.getMap("$lt", 10)), null, null, 0, 0, 1000, null, null, null);
         assert (lst.size() == 10);
 
-        c = drv.count("morphium_test", "tst", Utils.getMap("counter", Utils.getMap("$lt", 10)), null);
+        c = drv.count("morphium_test", "tst", Utils.getMap("counter", Utils.getMap("$lt", 10)), null, null);
         assert (c == 10) : "Counter is " + c;
 
         long dur = System.currentTimeMillis() - start;
@@ -373,45 +372,45 @@ public class MorphiumDriverSpeedTest {
 
     @Test
     public void crudTestMongod() throws Exception {
-        Driver drv = new Driver();
-        drv.setHostSeed("localhost:27017");
-        drv.connect();
-
-        drv.drop("morphium_test", "tst", null);
-
-        long start = System.currentTimeMillis();
-        List<Map<String, Object>> lst = new ArrayList<>();
-        for (int i = 0; i < countObjs; i++) {
-            UncachedObject uc = new UncachedObject();
-            uc.setCounter(i);
-            uc.setValue("V:" + i);
-            lst.add(new ObjectMapperImpl().serialize(uc));
-        }
-        drv.insert("morphium_test", "tst", lst, null);
-
-        //        Thread.sleep(1000);
-
-        lst = drv.find("morphium_test", "tst", new HashMap<>(), null, null, 0, 0, 1000, null, null);
-        log.info("List: " + lst.size());
-        assert (lst.size() == countObjs);
-
-        drv.delete("morphium_test", "tst", Utils.getMap("counter", 100), false, null);
-        //        Thread.sleep(1000);
-        lst = drv.find("morphium_test", "tst", new HashMap<>(), null, null, 0, 0, 1000, null, null);
-        assert (lst.size() != countObjs) : "Size is still " + lst.size();
-        assert (lst.size() == countObjs - 1) : "Size is not correct " + lst.size();
-
-        long c = drv.count("morphium_test", "tst", new HashMap<>(), null);
-        assert (c == countObjs - 1) : "Count wrong: " + c;
-
-
-        lst = drv.find("morphium_test", "tst", Utils.getMap("counter", Utils.getMap("$lt", 10)), null, null, 0, 0, 1000, null, null);
-        assert (lst.size() == 10);
-
-        c = drv.count("morphium_test", "tst", Utils.getMap("counter", Utils.getMap("$lt", 10)), null);
-        assert (c == 10) : "Counter is " + c;
-        long dur = System.currentTimeMillis() - start;
-        log.info("Duration: " + dur);
+//        Driver drv = new Driver();
+//        drv.setHostSeed("localhost:27017");
+//        drv.connect();
+//
+//        drv.drop("morphium_test", "tst", null);
+//
+//        long start = System.currentTimeMillis();
+//        List<Map<String, Object>> lst = new ArrayList<>();
+//        for (int i = 0; i < countObjs; i++) {
+//            UncachedObject uc = new UncachedObject();
+//            uc.setCounter(i);
+//            uc.setValue("V:" + i);
+//            lst.add(new ObjectMapperImpl().serialize(uc));
+//        }
+//        drv.insert("morphium_test", "tst", lst, null);
+//
+//        //        Thread.sleep(1000);
+//
+//        lst = drv.find("morphium_test", "tst", new HashMap<>(), null, null, 0, 0, 1000, null, null);
+//        log.info("List: " + lst.size());
+//        assert (lst.size() == countObjs);
+//
+//        drv.delete("morphium_test", "tst", Utils.getMap("counter", 100), false, null);
+//        //        Thread.sleep(1000);
+//        lst = drv.find("morphium_test", "tst", new HashMap<>(), null, null, 0, 0, 1000, null, null);
+//        assert (lst.size() != countObjs) : "Size is still " + lst.size();
+//        assert (lst.size() == countObjs - 1) : "Size is not correct " + lst.size();
+//
+//        long c = drv.count("morphium_test", "tst", new HashMap<>(), null);
+//        assert (c == countObjs - 1) : "Count wrong: " + c;
+//
+//
+//        lst = drv.find("morphium_test", "tst", Utils.getMap("counter", Utils.getMap("$lt", 10)), null, null, 0, 0, 1000, null, null);
+//        assert (lst.size() == 10);
+//
+//        c = drv.count("morphium_test", "tst", Utils.getMap("counter", Utils.getMap("$lt", 10)), null);
+//        assert (c == 10) : "Counter is " + c;
+//        long dur = System.currentTimeMillis() - start;
+//        log.info("Duration: " + dur);
     }
 
 
@@ -420,7 +419,7 @@ public class MorphiumDriverSpeedTest {
         SingleConnectThreaddedDriver drv = new SingleConnectThreaddedDriver();
         drv.setHostSeed("localhost:27017");
         drv.connect();
-        drv.delete("morphium_test", "tst", Utils.getMap("counter", 100), false, null);
+        drv.delete("morphium_test", "tst", Utils.getMap("counter", 100), false, null, null);
         Thread.sleep(1000);
     }
 

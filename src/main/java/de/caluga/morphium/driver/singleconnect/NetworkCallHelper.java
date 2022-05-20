@@ -23,7 +23,7 @@ public class NetworkCallHelper {
     public Map<String, Object> doCall(MorphiumDriverOperation r, int maxRetry, int sleep) throws MorphiumDriverException {
         for (int i = 0; i < maxRetry; i++) {
             try {
-                return r.execute();
+                return (Map<String, Object>) r.execute();
             } catch (Exception e) {
                 handleNetworkError(maxRetry, i, sleep, e);
             }

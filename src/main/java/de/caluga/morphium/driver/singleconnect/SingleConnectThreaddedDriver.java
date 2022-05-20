@@ -2,6 +2,10 @@ package de.caluga.morphium.driver.singleconnect;/**
  * Created by stephan on 30.11.15.
  */
 
+import com.mongodb.event.ClusterListener;
+import com.mongodb.event.CommandListener;
+import com.mongodb.event.ConnectionPoolListener;
+import de.caluga.morphium.Collation;
 import de.caluga.morphium.Morphium;
 import de.caluga.morphium.Utils;
 import de.caluga.morphium.driver.*;
@@ -11,6 +15,7 @@ import de.caluga.morphium.driver.wireprotocol.OpReply;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -63,8 +68,8 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 port = Integer.parseInt(h[1]);
             }
             s = new Socket(h[0], port);
-            s.setKeepAlive(isSocketKeepAlive());
-            s.setSoTimeout(getSocketTimeout());
+//            s.setKeepAlive(isSocketKeepAlive());
+//            s.setSoTimeout(getSocketTimeout());
 
             out = s.getOutputStream();
             in = s.getInputStream();
@@ -240,6 +245,11 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
+    public Map<String, Object> getCollStats(String db, String coll) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
     public Map<String, Object> getOps(long threshold) throws MorphiumDriverException {
         return null;
     }
@@ -269,6 +279,11 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
+    public MorphiumCursor initAggregationIteration(String db, String collection, List<Map<String, Object>> aggregationPipeline, ReadPreference readPreference, Collation collation, int batchSize, Map<String, Object> findMetaData) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
     public OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException {
         final OpReply[] rep = new OpReply[1];
         ReplyListener rl = (r) -> {
@@ -287,7 +302,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
-    public MorphiumCursor initIteration(String db, String collection, Map<String, Object> query, Map<String, Integer> sort, Map<String, Object> projection, int skip, int limit, int batchSize, ReadPreference readPreference, Map<String, Object> findMetaData) throws MorphiumDriverException {
+    public MorphiumCursor initIteration(String db, String collection, Map<String, Object> query, Map<String, Integer> sort, Map<String, Object> projection, int skip, int limit, int batchSize, ReadPreference readPreference, Collation collation, Map<String, Object> findMetaData) throws MorphiumDriverException {
         if (sort == null) {
             sort = new HashMap<>();
         }
@@ -345,14 +360,15 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
-    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
 
     }
 
     @Override
-    public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+    public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
 
     }
+
 
     @Override
     public MorphiumCursor nextIteration(MorphiumCursor crs) throws MorphiumDriverException {
@@ -415,7 +431,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
-    public List<Map<String, Object>> find(String db, String collection, Map<String, Object> query, Map<String, Integer> s, Map<String, Object> projection, int skip, int limit, int batchSize, ReadPreference rp, Map<String, Object> findMetaData) throws MorphiumDriverException {
+    public List<Map<String, Object>> find(String db, String collection, Map<String, Object> query, Map<String, Integer> s, Map<String, Object> projection, int skip, int limit, int batchSize, ReadPreference rp, Collation collation, Map<String, Object> findMetaData) throws MorphiumDriverException {
         if (s == null) {
             s = new HashMap<>();
         }
@@ -525,6 +541,11 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
+    public Map<String, Object> update(String db, String collection, List<Map<String, Object>> updateCommand, boolean ordered, WriteConcern wc) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
     protected void sendQuery(OpQuery q) throws MorphiumDriverException {
         boolean retry = true;
         if (q.getDb() == null) {
@@ -555,7 +576,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
-    public long count(String db, String collection, Map<String, Object> query, ReadPreference rp) throws MorphiumDriverException {
+    public long count(String db, String collection, Map<String, Object> query, Collation collation, ReadPreference rp) throws MorphiumDriverException {
         Map<String, Object> ret = new NetworkCallHelper().doCall(() -> {
             OpQuery q = new OpQuery();
             q.setDb(db);
@@ -576,6 +597,11 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             return Utils.getMap("count", n == null ? 0 : n);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
         return ((int) ret.get("count"));
+    }
+
+    @Override
+    public long estimatedDocumentCount(String db, String collection, ReadPreference rp) {
+        return 0;
     }
 
     @Override
@@ -607,7 +633,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 map.put("writeConcern", new HashMap<String, Object>());
                 op.setDoc(map);
 
-                if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+                if ((wc != null) || (wc == null && isDefaultFsync())) {
                     sendAndWaitForReply(op);
                 } else {
                     sendQuery(op); //no need to wait for reply...
@@ -618,8 +644,8 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
-    public Map<String, Object> store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
-        return new NetworkCallHelper().doCall(() -> {
+    public Map<String, Integer> store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
+        return (Map) new NetworkCallHelper().doCall(() -> {
             List<Map<String, Object>> toInsert = new ArrayList<>();
             List<Map<String, Object>> toUpdate = new ArrayList<>();
             for (Map<String, Object> o : objs) {
@@ -651,7 +677,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
-    public Map<String, Object> update(String db, String collection, Map<String, Object> query, Map<String, Object> ops, boolean multiple, boolean upsert, WriteConcern wc) throws MorphiumDriverException {
+    public Map<String, Object> update(String db, String collection, Map<String, Object> query, Map<String, Object> ops, boolean multiple, boolean upsert, Collation collation, WriteConcern wc) throws MorphiumDriverException {
         List<Map<String, Object>> opsLst = new ArrayList<>();
         Map<String, Object> up = new HashMap<>();
         up.put("q", query);
@@ -662,7 +688,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
         return update(db, collection, opsLst, false, wc);
     }
 
-    public Map<String, Object> update(String db, String collection, List<Map<String, Object>> updateCommand, boolean ordered, WriteConcern wc) throws MorphiumDriverException {
+    public Map<String, Object> update(String db, String collection, List<Map<String, Object>> updateCommand, boolean ordered, Collation collation, WriteConcern wc) throws MorphiumDriverException {
         return new NetworkCallHelper().doCall(() -> {
             int idx = 0;
             for (int i = idx; i < updateCommand.size() - idx; i += getMaxWriteBatchSize()) {
@@ -682,7 +708,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
                 map.put("ordered", false);
                 map.put("writeConcern", new HashMap<String, Object>());
                 op.setDoc(map);
-                if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+                if ((wc != null) || (wc == null && isDefaultFsync())) {
                     sendAndWaitForReply(op);
                 } else {
                     sendQuery(op); //no need to wait for reply...
@@ -695,7 +721,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
 
     @Override
     public Map<String, Object> delete(String db, String collection, Map<String, Object> query,
-                                      boolean multiple, WriteConcern wc) throws MorphiumDriverException {
+                                      boolean multiple, Collation collation, WriteConcern wc) throws MorphiumDriverException {
         return new NetworkCallHelper().doCall(() -> {
             OpQuery op = new OpQuery();
             op.setColl("$cmd");
@@ -722,10 +748,11 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             o.put("deletes", del);
             op.setDoc(o);
 
-            if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+            if ((wc != null) || (wc == null && isDefaultFsync())) {
                 sendAndWaitForReply(op);
             } else {
-                sendQuery(op); //no need to wait for reply...
+                //sendQuery(op); //no need to wait for reply...
+                sendAndWaitForReply(op);
             }
             //        }
             return null;
@@ -744,7 +771,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             HashMap<String, Object> map = new LinkedHashMap<>();
             map.put("drop", collection);
             op.setDoc(map);
-            if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+            if ((wc != null) || (wc == null && isDefaultFsync())) {
                 sendAndWaitForReply(op);
             } else {
                 sendQuery(op); //no need to wait for reply...
@@ -766,7 +793,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             map.put("drop", 1);
             op.setDoc(map);
 
-            if ((wc != null && wc.isFsync()) || (wc == null && isDefaultFsync())) {
+            if ((wc != null) || (wc == null && isDefaultFsync())) {
                 sendAndWaitForReply(op);
             } else {
                 sendQuery(op); //no need to wait for reply...
@@ -787,7 +814,7 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
-    public List<Object> distinct(String db, String collection, String field, Map<String, Object> filter, ReadPreference rp) throws MorphiumDriverException {
+    public List<Object> distinct(String db, String collection, String field, Map<String, Object> filter, Collation collation, ReadPreference rp) throws MorphiumDriverException {
         Map<String, Object> ret = new NetworkCallHelper().doCall(() -> {
             OpQuery op = new OpQuery();
             op.setColl("$cmd");
@@ -856,6 +883,21 @@ public class SingleConnectThreaddedDriver extends DriverBase {
         return ret.stream().map(c -> (String) c.get("name")).collect(Collectors.toList());
     }
 
+    @Override
+    public Map<String, Object> findAndOneAndDelete(String db, String col, Map<String, Object> query, Map<String, Integer> sort, Collation collation) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public Map<String, Object> findAndOneAndUpdate(String db, String col, Map<String, Object> query, Map<String, Object> update, Map<String, Integer> sort, Collation collation) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public Map<String, Object> findAndOneAndReplace(String db, String col, Map<String, Object> query, Map<String, Object> replacement, Map<String, Integer> sort, Collation collation) throws MorphiumDriverException {
+        return null;
+    }
+
     private List<Map<String, Object>> getCollectionInfo(String db, String collection) throws MorphiumDriverException {
         //noinspection unchecked
         return (List<Map<String, Object>>) new NetworkCallHelper().doCall(() -> {
@@ -882,50 +924,50 @@ public class SingleConnectThreaddedDriver extends DriverBase {
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries()).get("result");
     }
 
+//    @Override
+//    public Map<String, Object> group(String db, String coll, Map<String, Object> query, Map<String, Object> initial, String jsReduce, String jsFinalize, ReadPreference rp, String... keys) throws MorphiumDriverException {
+//        return new NetworkCallHelper().doCall(() -> {
+//            OpQuery q = new OpQuery();
+//            q.setDb(db);
+//            q.setColl("$cmd");
+//            q.setReqId(getNextId());
+//            q.setSkip(0);
+//            q.setLimit(1);
+//
+//            @SuppressWarnings("MismatchedQueryAndUpdateOfCollection") Map<String, Object> cmd = new LinkedHashMap<>();
+//            Map<String, Object> map = Utils.getMap("ns", coll);
+//
+//            Map<String, Object> key = new HashMap<>();
+//            for (String k : keys) key.put(k, 1);
+//            map.put("key", key);
+//            if (jsReduce != null) {
+//                map.put("$reduce", jsReduce);
+//            }
+//
+//            if (jsFinalize != null) {
+//                map.put("finalize", jsFinalize);
+//            }
+//            if (initial != null) {
+//                map.put("initial", initial);
+//            }
+//            if (query != null) {
+//                map.put("cond", query);
+//            }
+//
+//            cmd.put("group", map);
+//
+//            try {
+//                sendAndWaitForReply(q);
+//            } catch (MorphiumDriverException e) {
+//                log.error("Sending of message failed: ", e);
+//                return null;
+//            }
+//            return null;
+//        }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
+//    }
+
     @Override
-    public Map<String, Object> group(String db, String coll, Map<String, Object> query, Map<String, Object> initial, String jsReduce, String jsFinalize, ReadPreference rp, String... keys) throws MorphiumDriverException {
-        return new NetworkCallHelper().doCall(() -> {
-            OpQuery q = new OpQuery();
-            q.setDb(db);
-            q.setColl("$cmd");
-            q.setReqId(getNextId());
-            q.setSkip(0);
-            q.setLimit(1);
-
-            @SuppressWarnings("MismatchedQueryAndUpdateOfCollection") Map<String, Object> cmd = new LinkedHashMap<>();
-            Map<String, Object> map = Utils.getMap("ns", coll);
-
-            Map<String, Object> key = new HashMap<>();
-            for (String k : keys) key.put(k, 1);
-            map.put("key", key);
-            if (jsReduce != null) {
-                map.put("$reduce", jsReduce);
-            }
-
-            if (jsFinalize != null) {
-                map.put("finalize", jsFinalize);
-            }
-            if (initial != null) {
-                map.put("initial", initial);
-            }
-            if (query != null) {
-                map.put("cond", query);
-            }
-
-            cmd.put("group", map);
-
-            try {
-                sendAndWaitForReply(q);
-            } catch (MorphiumDriverException e) {
-                log.error("Sending of message failed: ", e);
-                return null;
-            }
-            return null;
-        }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
-    }
-
-    @Override
-    public List<Map<String, Object>> aggregate(String db, String collection, List<Map<String, Object>> pipeline, boolean explain, boolean allowDiskUse, ReadPreference readPreference) throws MorphiumDriverException {
+    public List<Map<String, Object>> aggregate(String db, String collection, List<Map<String, Object>> pipeline, boolean explain, boolean allowDiskUse, Collation collation, ReadPreference readPreference) throws MorphiumDriverException {
         //noinspection unchecked
         return (List<Map<String, Object>>) new NetworkCallHelper().doCall(() -> {
             OpQuery q = new OpQuery();
@@ -946,6 +988,16 @@ public class SingleConnectThreaddedDriver extends DriverBase {
             List<Map<String, Object>> lst = readBatches(q, db, collection, getMaxWriteBatchSize());
             return Utils.getMap("result", lst);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries()).get("result");
+    }
+
+    @Override
+    public int getServerSelectionTimeout() {
+        return 0;
+    }
+
+    @Override
+    public void setServerSelectionTimeout(int serverSelectionTimeout) {
+
     }
 
 
@@ -996,6 +1048,51 @@ public class SingleConnectThreaddedDriver extends DriverBase {
     }
 
     @Override
+    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing, Map<String, Object> query) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public List<Map<String, Object>> mapReduce(String db, String collection, String mapping, String reducing, Map<String, Object> query, Map<String, Object> sorting, Collation collation) throws MorphiumDriverException {
+        return null;
+    }
+
+    @Override
+    public void addCommandListener(CommandListener cmd) {
+
+    }
+
+    @Override
+    public void removeCommandListener(CommandListener cmd) {
+
+    }
+
+    @Override
+    public void addClusterListener(ClusterListener cl) {
+
+    }
+
+    @Override
+    public void removeClusterListener(ClusterListener cl) {
+
+    }
+
+    @Override
+    public void addConnectionPoolListener(ConnectionPoolListener cpl) {
+
+    }
+
+    @Override
+    public void removeConnectionPoolListener(ConnectionPoolListener cpl) {
+
+    }
+
+    @Override
     public void startTransaction() {
 
     }
@@ -1017,6 +1114,26 @@ public class SingleConnectThreaddedDriver extends DriverBase {
 
     @Override
     public void abortTransaction() {
+
+    }
+
+    @Override
+    public SSLContext getSslContext() {
+        return null;
+    }
+
+    @Override
+    public void setSslContext(SSLContext sslContext) {
+
+    }
+
+    @Override
+    public boolean isSslInvalidHostNameAllowed() {
+        return false;
+    }
+
+    @Override
+    public void setSslInvalidHostNameAllowed(boolean sslInvalidHostNameAllowed) {
 
     }
 

@@ -108,12 +108,12 @@
         <dependency>
             <groupId>de.caluga</groupId>
             <artifactId>morphium</artifactId>
-            <version>4.1.2</version>
+            <version>4.2.16</version>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.2.3</version>
+            <version>1.2.9</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -139,13 +139,6 @@
             <version>RELEASE</version>
         </dependency>
 
-
-        <dependency>
-            <groupId>org.mongodb</groupId>
-            <artifactId>mongodb-driver</artifactId>
-            <version>3.12.5</version>
-            <scope>provided</scope>
-        </dependency>
         <dependency>
             <groupId>com.googlecode.json-simple</groupId>
             <artifactId>json-simple</artifactId>

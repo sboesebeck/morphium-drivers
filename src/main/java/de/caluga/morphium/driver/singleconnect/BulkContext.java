@@ -34,7 +34,7 @@ public class BulkContext extends BulkRequestContext {
         this.db = db;
         this.collection = collection;
         this.wc = wc;
-        setBatchSize(batchSize);
+        //setBatchSize(batchSize);
 
         requests = new ArrayList<>();
     }
@@ -57,12 +57,6 @@ public class BulkContext extends BulkRequestContext {
         return in;
     }
 
-    @Override
-    public StoreBulkRequest addStoreBulkRequest(List<Map<String, Object>> toStore) {
-        StoreBulkRequest store = new StoreBulkRequest(toStore);
-        addRequest(store);
-        return store;
-    }
 
     @Override
     public DeleteBulkRequest addDeleteBulkRequest() {
@@ -85,13 +79,7 @@ public class BulkContext extends BulkRequestContext {
 
         //TODO - add result data
         for (BulkRequest br : requests) {
-            if (br instanceof StoreBulkRequest) {
-                stores.addAll(((StoreBulkRequest) br).getToInsert());
-                if (stores.size() >= driver.getMaxWriteBatchSize()) {
-                    driver.store(db, collection, stores, wc);
-                    stores.clear();
-                }
-            } else if (br instanceof InsertBulkRequest) {
+            if (br instanceof InsertBulkRequest) {
                 //                //Insert...
                 //                InsertBulkRequest ib = (InsertBulkRequest) br;
                 inserts.addAll(((InsertBulkRequest) br).getToInsert());
@@ -101,7 +89,7 @@ public class BulkContext extends BulkRequestContext {
                 }
             } else if (br instanceof DeleteBulkRequest) {
                 //no real bulk operation here
-                driver.delete(db, collection, ((DeleteBulkRequest) br).getQuery(), ((DeleteBulkRequest) br).isMultiple(), wc);
+                driver.delete(db, collection, ((DeleteBulkRequest) br).getQuery(), ((DeleteBulkRequest) br).isMultiple(), null, wc);
             } else {
                 //                //update
                 UpdateBulkRequest up = (UpdateBulkRequest) br;
