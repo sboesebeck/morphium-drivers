@@ -5,6 +5,7 @@ package de.caluga.morphium.driver.wireprotocol;/**
 
 import de.caluga.morphium.driver.bson.BsonDecoder;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -51,6 +52,15 @@ public class OpReply extends WireProtocolMessage {
     @SuppressWarnings("unused")
     public void setInReplyTo(int inReplyTo) {
         this.inReplyTo = inReplyTo;
+    }
+
+    @Override
+    public void parsePayload(byte[] bytes, int offset) throws IOException {
+    }
+
+    @Override
+    public byte[] getPayload() throws IOException {
+        return new byte[0];
     }
 
     @SuppressWarnings("unused")

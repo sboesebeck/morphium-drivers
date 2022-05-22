@@ -15,13 +15,13 @@ import java.util.regex.Pattern;
 @SuppressWarnings("WeakerAccess")
 public class BsonDecoder {
 
-    public Map<String, Object> decodeDocument(byte[] in) throws UnsupportedEncodingException {
+    public static Map<String, Object> decodeDocument(byte[] in) throws UnsupportedEncodingException {
         Map<String, Object> ret = new HashMap<>();
         decodeDocumentIn(ret, in, 0);
         return ret;
     }
 
-    public int decodeDocumentIn(Map<String, Object> ret, byte[] in, int startIndex) throws UnsupportedEncodingException {
+    public static int decodeDocumentIn(Map<String, Object> ret, byte[] in, int startIndex) throws UnsupportedEncodingException {
         int sz = readInt(in, startIndex);
         if (sz > in.length) {
             throw new RuntimeException("error - size differs! read " + sz + " but buffer is " + in.length);
@@ -196,12 +196,12 @@ public class BsonDecoder {
     }
 
 
-    public int readInt(byte[] bytes, int idx) {
+    public static int readInt(byte[] bytes, int idx) {
         return (bytes[idx] & 0xFF) | (bytes[idx + 1] & 0xFF) << 8 | (bytes[idx + 2] & 0xFF) << 16 | ((bytes[idx + 3] & 0xFF) << 24);
 
     }
 
-    public long readLong(byte[] bytes, int idx) {
+    public static long readLong(byte[] bytes, int idx) {
         return ((long) ((bytes[idx] & 0xFF))) |
                 ((long) ((bytes[idx + 1] & 0xFF)) << 8) |
                 ((long) (bytes[idx + 2] & 0xFF) << 16) |

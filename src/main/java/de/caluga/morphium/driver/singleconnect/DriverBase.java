@@ -3,8 +3,7 @@ package de.caluga.morphium.driver.singleconnect;
 import de.caluga.morphium.Utils;
 import de.caluga.morphium.driver.*;
 import de.caluga.morphium.driver.mongodb.Maximums;
-import de.caluga.morphium.driver.wireprotocol.OpQuery;
-import de.caluga.morphium.driver.wireprotocol.OpReply;
+import de.caluga.morphium.driver.wireprotocol.OpMsg;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -570,11 +569,11 @@ public abstract class DriverBase implements MorphiumDriver {
 //        return ret;
 //    }
 
-    protected abstract void sendQuery(OpQuery q) throws MorphiumDriverException;
+    protected abstract void sendQuery(OpMsg q) throws MorphiumDriverException;
 
-    public abstract OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException;
+    public abstract OpMsg sendAndWaitForReply(OpMsg q) throws MorphiumDriverException;
 
-    protected abstract OpReply getReply(int waitingFor, int timeout) throws MorphiumDriverException;
+    protected abstract OpMsg getReply(int waitingFor, int timeout) throws MorphiumDriverException;
 
 
     protected void killCursors(String db, String coll, long... ids) throws MorphiumDriverException {
@@ -587,18 +586,12 @@ public abstract class DriverBase implements MorphiumDriver {
         if (cursorIds.isEmpty()) {
             return;
         }
-
-        OpQuery q = new OpQuery();
-        q.setDb(db);
-        q.setColl("$cmd");
-        q.setLimit(1);
-        q.setSkip(0);
-        q.setReqId(getNextId());
-
-        Map<String, Object> doc = new LinkedHashMap<>();
-        doc.put("killCursors", coll);
-        doc.put("cursors", cursorIds);
-        q.setDoc(doc);
+        OpMsg q = new OpMsg();
+        q.setMessageId(getNextId());
+        q.addDoc(Utils.getMap("killCursors", (Object) coll)
+                .add("cursors", cursorIds)
+                .add("$db", db)
+        );
         sendQuery(q);
 
     }
@@ -612,15 +605,11 @@ public abstract class DriverBase implements MorphiumDriver {
         final Map<String, Integer> sort = s;
         //noinspection unchecked
         new NetworkCallHelper().doCall(() -> {
-            OpQuery q = new OpQuery();
-            q.setDb(db);
-            q.setColl("$cmd");
-            q.setLimit(1);
-            q.setSkip(0);
-            q.setReqId(getNextId());
+
 
             Map<String, Object> doc = new LinkedHashMap<>();
             doc.put("find", collection);
+            doc.put("$db", db);
             if (limit > 0) {
                 doc.put("limit", limit);
             }
@@ -640,17 +629,17 @@ public abstract class DriverBase implements MorphiumDriver {
             doc.put("maxTimeMS", t);
             doc.put("tailable", true);
             doc.put("awaitData", true);
-            q.setDoc(doc);
-            q.setInReplyTo(0);
-            q.setTailableCursor(true);
-            q.setAwaitData(true);
-            q.setNoCursorTimeout(true);
+
+            OpMsg q = new OpMsg();
+            q.setMessageId(getNextId());
+            q.addDoc(doc);
+            q.setResponseTo(0);
 
             long start = System.currentTimeMillis();
             List<Map<String, Object>> ret = null;
 
-            OpReply reply;
-            int waitingfor = q.getReqId();
+            OpMsg reply;
+            int waitingfor = q.getMessageId();
             long cursorId;
             log.info("Starting...");
 
@@ -658,17 +647,17 @@ public abstract class DriverBase implements MorphiumDriver {
                 log.debug("reading result");
                 reply = sendAndWaitForReply(q);
 
-                @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocuments().get(0).get("cursor");
+                @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocs().get(0).get("cursor");
                 if (cursor == null) {
                     log.debug("no-cursor result");
                     //                    //trying result
-                    if (reply.getDocuments().get(0).get("result") != null) {
+                    if (reply.getDocs().get(0).get("result") != null) {
                         //noinspection unchecked
-                        for (Map<String, Object> d : (List<Map<String, Object>>) reply.getDocuments().get(0).get("result")) {
+                        for (Map<String, Object> d : (List<Map<String, Object>>) reply.getDocs().get(0).get("result")) {
                             cb.incomingData(d, System.currentTimeMillis() - start);
                         }
                     }
-                    log.error("did not get cursor. Data: " + Utils.toJsonString(reply.getDocuments().get(0)));
+                    log.error("did not get cursor. Data: " + Utils.toJsonString(reply.getDocs().get(0)));
                     //                    throw new MorphiumDriverException("did not get any data, cursor == null!");
 
                     log.debug("Retrying");
@@ -703,15 +692,12 @@ public abstract class DriverBase implements MorphiumDriver {
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-                    q = new OpQuery();
-                    q.setDb(db);
-                    q.setColl("$cmd");
-                    q.setLimit(1);
-                    q.setSkip(0);
-                    q.setReqId(getNextId());
+                    q = new OpMsg();
+
 
                     doc = new LinkedHashMap<>();
                     doc.put("find", collection);
+                    doc.put("$db", db);
                     if (limit > 0) {
                         doc.put("limit", limit);
                     }
@@ -725,32 +711,34 @@ public abstract class DriverBase implements MorphiumDriver {
                     doc.put("sort", sort);
                     doc.put("batchSize", 1);
                     doc.put("maxTimeMS", timeout);
-                    q.setDoc(doc);
-                    q.setInReplyTo(0);
-                    q.setTailableCursor(true);
-                    q.setAwaitData(true);
-                    q.setNoCursorTimeout(true);
+                    doc.put("tailable", true);
+                    doc.put("awaitData", true);
+                    doc.put("noCursorTimeout", true);
+                    doc.put("allowPartialResults", false);
+                    q.setMessageId(getNextId());
+
+                    q.addDoc(doc);
+                    q.setResponseTo(0);
                     sendQuery(q);
                     continue;
                 }
-                q = new OpQuery();
-                q.setColl("$cmd");
-                q.setDb(db);
-                q.setReqId(getNextId());
-                q.setSkip(0);
-                q.setTailableCursor(true);
-                q.setAwaitData(true);
-                q.setNoCursorTimeout(true);
-                q.setSlaveOk(false);
-                q.setLimit(1);
+                q = new OpMsg();
+                q.setMessageId(getNextId());
+
                 doc = new LinkedHashMap<>();
                 doc.put("getMore", cursorId);
                 doc.put("collection", collection);
                 doc.put("batchSize", batchSize);
                 doc.put("maxTimeMS", timeout);
+                doc.put("limit", 1);
+                doc.put("tailable", true);
+                doc.put("awaitData", true);
+                //doc.put("slaveOk")
+                doc.put("noCursorTimeout", true);
+                doc.put("$db", db);
 
-                q.setDoc(doc);
-                waitingfor = q.getReqId();
+                q.addDoc(doc);
+                waitingfor = q.getMessageId();
                 sendQuery(q);
 
                 log.debug("sent getmore....");

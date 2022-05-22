@@ -2,17 +2,22 @@ package de.caluga.morphium.driver.wireprotocol;/**
  * Created by stephan on 04.11.15.
  */
 
+import de.caluga.morphium.Utils;
+import de.caluga.morphium.driver.bson.BsonDecoder;
 import de.caluga.morphium.driver.bson.BsonEncoder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Query call implementation for MongoDB wire protocol
  **/
 public class OpQuery extends WireProtocolMessage {
-    private int opCode = 2004;
+    private static final int OP_CODE = 2004;
 
     private String db;
     private String coll;
@@ -22,17 +27,9 @@ public class OpQuery extends WireProtocolMessage {
 
     private int reqId;
     private int inReplyTo;
+    private int flags;
+    private Map<String, Object> returnFieldSelector;
 
-
-    @SuppressWarnings("unused")
-    public int getOpCode() {
-        return opCode;
-    }
-
-    @SuppressWarnings("unused")
-    public void setOpCode(int opCode) {
-        this.opCode = opCode;
-    }
 
     public String getDb() {
         return db;
@@ -95,24 +92,60 @@ public class OpQuery extends WireProtocolMessage {
         this.inReplyTo = inReplyTo;
     }
 
-    public byte[] bytes() throws IOException {
-        byte[] payload = getPayload();
+    public byte[] getPayload() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeInt(payload.length + 12, out);
-        writeInt(reqId, out);
-        writeInt(inReplyTo, out);
-        out.write(payload);
-        return out.toByteArray();
-    }
-
-    private byte[] getPayload() throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeInt(opCode, out);
+        writeInt(getOpCode(), out);
         writeInt(flags, out);
         writeString(db + "." + coll, out);
         writeInt(skip, out);
         writeInt(limit, out);
         out.write(BsonEncoder.encodeDocument(doc));
         return out.toByteArray();
+    }
+
+    @Override
+    public int getOpCode() {
+        return OP_CODE;
+    }
+
+
+    @Override
+    public void parsePayload(byte[] bytes, int offset) {
+        doc = new HashMap<>();
+        flags = readInt(bytes, offset);
+        offset += 4;
+        coll = readString(bytes, offset);
+        offset += coll.getBytes(StandardCharsets.UTF_8).length + 1;
+        skip = readInt(bytes, offset);
+        offset += 4;
+        limit = readInt(bytes, offset);
+        offset += 4;
+        try {
+            int sz = BsonDecoder.decodeDocumentIn(doc, bytes, offset);
+            if (sz + offset < bytes.length) {
+                //another doc?
+                returnFieldSelector = new HashMap<String, Object>();
+                BsonDecoder.decodeDocumentIn(returnFieldSelector, bytes, offset + sz);
+            }
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+
+
+    @Override
+    public String toString() {
+        return "OpQuery{" +
+                "db='" + db + '\'' +
+                ", coll='" + coll + '\'' +
+                ", skip=" + skip +
+                ", limit=" + limit +
+                ", doc=" + Utils.toJsonString(doc) +
+                ", reqId=" + reqId +
+                ", inReplyTo=" + inReplyTo +
+                ", flags=" + flags +
+                ", returnFieldsSelector=" + Utils.toJsonString(returnFieldSelector) +
+                '}';
     }
 }

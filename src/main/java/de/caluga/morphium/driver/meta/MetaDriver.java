@@ -12,9 +12,8 @@ import de.caluga.morphium.driver.constants.RunCommand;
 import de.caluga.morphium.driver.singleconnect.BulkContext;
 import de.caluga.morphium.driver.singleconnect.DriverBase;
 import de.caluga.morphium.driver.singleconnect.SingleConnectCursor;
-import de.caluga.morphium.driver.singleconnect.SingleConnectThreaddedDriver;
-import de.caluga.morphium.driver.wireprotocol.OpQuery;
-import de.caluga.morphium.driver.wireprotocol.OpReply;
+import de.caluga.morphium.driver.singleconnect.SingleConnectDriver;
+import de.caluga.morphium.driver.wireprotocol.OpMsg;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -976,7 +975,7 @@ public class MetaDriver extends DriverBase {
     }
 
     private DriverBase createAndConnectDriver(String host) throws MorphiumDriverException {
-        DriverBase d = new SingleConnectThreaddedDriver();
+        DriverBase d = new SingleConnectDriver();
         d.setHostSeed(host); //only connecting to one host
         d.setConnectionTimeout(getConnectionTimeout());
         d.setDefaultWriteTimeout(getDefaultWriteTimeout());
@@ -1135,18 +1134,19 @@ public class MetaDriver extends DriverBase {
         errorCountByHost.merge(host, 0, (a, b) -> a - b);
     }
 
+
     @Override
-    protected void sendQuery(OpQuery q) throws MorphiumDriverException {
+    protected void sendQuery(OpMsg q) throws MorphiumDriverException {
 
     }
 
     @Override
-    public OpReply sendAndWaitForReply(OpQuery q) throws MorphiumDriverException {
+    public OpMsg sendAndWaitForReply(OpMsg q) throws MorphiumDriverException {
         return null;
     }
 
     @Override
-    protected OpReply getReply(int waitingFor, int timeout) throws MorphiumDriverException {
+    protected OpMsg getReply(int waitingFor, int timeout) throws MorphiumDriverException {
         return null;
     }
 
