@@ -167,7 +167,7 @@ public class SingleConnectDriver extends DriverBase {
             OpMsg q = new OpMsg();
             cmd.put("$db", db);
             q.setMessageId(getNextId());
-            q.addDoc(cmd);
+            q.setFirstDoc(cmd);
 
             OpMsg rep = null;
             synchronized (SingleConnectDriver.this) {
@@ -178,10 +178,10 @@ public class SingleConnectDriver extends DriverBase {
                     e.printStackTrace();
                 }
             }
-            if (rep == null || rep.getDocs() == null) {
+            if (rep == null || rep.getFirstDoc() == null) {
                 return null;
             }
-            return rep.getDocs().get(0);
+            return rep.getFirstDoc();
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
 
     }
@@ -211,7 +211,7 @@ public class SingleConnectDriver extends DriverBase {
         doc.put("sort", sort);
         doc.put("batchSize", batchSize);
 
-        q.addDoc(doc);
+        q.setFirstDoc(doc);
         q.setFlags(0);
         q.setResponseTo(0);
 
@@ -228,7 +228,7 @@ public class SingleConnectDriver extends DriverBase {
         }
 
         MorphiumCursor crs = new MorphiumCursor();
-        @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocs().get(0).get("cursor");
+        @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getFirstDoc().get("cursor");
         if (cursor != null && cursor.get("id") != null) {
             crs.setCursorId((Long) cursor.get("id"));
         }
@@ -277,11 +277,11 @@ public class SingleConnectDriver extends DriverBase {
         synchronized (SingleConnectDriver.this) {
             OpMsg q = new OpMsg();
 
-            q.setDocs(Arrays.asList(Utils.getMap("getMore", (Object) cursorId)
+            q.setFirstDoc(Utils.getMap("getMore", (Object) cursorId)
                     .add("$db", internalCursorData.getDb())
                     .add("collection", internalCursorData.getCollection())
-                    .add("batchSize", internalCursorData.getBatchSize())
-            ));
+                    .add("batchSize", internalCursorData.getBatchSize()
+                    ));
             q.setMessageId(getNextId());
             sendQuery(q);
             reply = getReply();
@@ -289,10 +289,10 @@ public class SingleConnectDriver extends DriverBase {
         crs = new MorphiumCursor();
         //noinspection unchecked
         crs.setInternalCursorObject(internalCursorData);
-        @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocs().get(0).get("cursor");
+        @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getFirstDoc().get("cursor");
         if (cursor == null) {
             //cursor not found
-            throw new MorphiumDriverException("Iteration failed! Error: " + reply.getDocs().get(0).get("code") + "  Message: " + reply.getDocs().get(0).get("errmsg"));
+            throw new MorphiumDriverException("Iteration failed! Error: " + reply.getFirstDoc().get("code") + "  Message: " + reply.getFirstDoc().get("errmsg"));
         }
         if (cursor.get("id") != null) {
             crs.setCursorId((Long) cursor.get("id"));
@@ -334,7 +334,7 @@ public class SingleConnectDriver extends DriverBase {
             List<Map<String, Object>> ret;
 
             OpMsg q = new OpMsg();
-            q.setDocs(Arrays.asList(Utils.getMap("find", (Object) collection)
+            q.setFirstDoc(Utils.getMap("find", (Object) collection)
                     .add("$db", db)
                     .add("filter", query)
                     .add("projection", projection)
@@ -342,8 +342,8 @@ public class SingleConnectDriver extends DriverBase {
                     .add("skip", skip)
                     .add("limit", limit)
                     .add("batchSize", batchSize)
-                    .add("collation", collation != null ? collation.toQueryObject() : null)
-            ));
+                    .add("collation", collation != null ? collation.toQueryObject() : null
+                    ));
             q.setMessageId(getNextId());
             q.setFlags(0);
             synchronized (SingleConnectDriver.this) {
@@ -369,12 +369,12 @@ public class SingleConnectDriver extends DriverBase {
                     throw new MorphiumDriverNetworkException("Wrong answer - waiting for " + waitingfor + " but got " + reply.getResponseTo());
                 }
                 //                    replies.remove(i);
-                @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocs().get(0).get("cursor");
+                @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getFirstDoc().get("cursor");
                 if (cursor == null) {
                     //trying result
-                    if (reply.getDocs().get(0).get("result") != null) {
+                    if (reply.getFirstDoc().get("result") != null) {
                         //noinspection unchecked
-                        return (List<Map<String, Object>>) reply.getDocs().get(0).get("result");
+                        return (List<Map<String, Object>>) reply.getFirstDoc().get("result");
                     }
                     throw new MorphiumDriverException("did not get any data, cursor == null!");
                 }
@@ -391,11 +391,11 @@ public class SingleConnectDriver extends DriverBase {
 
                     //there is more! Sending getMore!
                     OpMsg q = new OpMsg();
-                    q.setDocs(Arrays.asList(Utils.getMap("getMore", (Object) cursor.get("id"))
+                    q.setFirstDoc(Utils.getMap("getMore", (Object) cursor.get("id"))
                             .add("$db", db)
                             .add("collection", collection)
                             .add("batchSize", batchSize)
-                    ));
+                    );
                     q.setMessageId(getNextId());
                     waitingfor = q.getMessageId();
                     sendQuery(q);
@@ -450,7 +450,7 @@ public class SingleConnectDriver extends DriverBase {
             doc.put("count", collection);
             doc.put("query", query);
             doc.put("$db", db);
-            q.addDoc(doc);
+            q.setFirstDoc(doc);
             q.setFlags(0);
             q.setResponseTo(0);
 
@@ -459,7 +459,7 @@ public class SingleConnectDriver extends DriverBase {
                 sendQuery(q);
                 rep = waitForReply(db, collection, query, q.getMessageId());
             }
-            Integer n = (Integer) rep.getDocs().get(0).get("n");
+            Integer n = (Integer) rep.getFirstDoc().get("n");
             return Utils.getMap("count", n == null ? 0 : n);
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
         return ((int) ret.get("count"));
@@ -492,7 +492,7 @@ public class SingleConnectDriver extends DriverBase {
                 map.put("$db", db);
                 map.put("ordered", false);
                 map.put("writeConcern", new HashMap<String, Object>());
-                op.addDoc(map);
+                op.setFirstDoc(map);
 
                 synchronized (SingleConnectDriver.this) {
                     sendQuery(op);
@@ -561,12 +561,12 @@ public class SingleConnectDriver extends DriverBase {
             map.put("ordered", false);
             map.put("$db", db);
             map.put("writeConcern", new HashMap<String, Object>());
-            op.addDoc(map);
+            op.setFirstDoc(map);
             synchronized (SingleConnectDriver.this) {
                 sendQuery(op);
                 if (wc != null) {
                     OpMsg res = waitForReply(db, collection, null, op.getMessageId());
-                    return res.getDocs().get(0);
+                    return res.getFirstDoc();
                 }
             }
             return null;
@@ -599,7 +599,7 @@ public class SingleConnectDriver extends DriverBase {
             del.add(q);
 
             o.put("deletes", del);
-            op.addDoc(o);
+            op.setFirstDoc(o);
 
 
             synchronized (SingleConnectDriver.this) {
@@ -620,9 +620,9 @@ public class SingleConnectDriver extends DriverBase {
         reply = getReply();
         //                replies.remove(i);
         if (reply.getResponseTo() == waitingfor) {
-            if (!reply.getDocs().get(0).get("ok").equals(1) && !reply.getDocs().get(0).get("ok").equals(1.0)) {
-                Object code = reply.getDocs().get(0).get("code");
-                Object errmsg = reply.getDocs().get(0).get("errmsg");
+            if (!reply.getFirstDoc().get("ok").equals(1) && !reply.getFirstDoc().get("ok").equals(1.0)) {
+                Object code = reply.getFirstDoc().get("code");
+                Object errmsg = reply.getFirstDoc().get("errmsg");
                 //                throw new MorphiumDriverException("Operation failed - error: " + code + " - " + errmsg, null, collection, db, query);
                 MorphiumDriverException mde = new MorphiumDriverException("Operation failed on " + getHostSeed()[0] + " - error: " + code + " - " + errmsg, null, collection, db, query);
                 mde.setMongoCode(code);
@@ -649,13 +649,13 @@ public class SingleConnectDriver extends DriverBase {
             HashMap<String, Object> map = new LinkedHashMap<>();
             map.put("drop", collection);
             map.put("$db", db);
-            op.addDoc(map);
+            op.setFirstDoc(map);
             synchronized (SingleConnectDriver.this) {
                 sendQuery(op);
                 try {
                     waitForReply(db, collection, null, op.getMessageId());
                 } catch (Exception e) {
-                    log.error("Drop failed! " + e.getMessage());
+                    log.warn("Drop failed! " + e.getMessage());
                 }
             }
             return null;
@@ -672,7 +672,7 @@ public class SingleConnectDriver extends DriverBase {
             HashMap<String, Object> map = new LinkedHashMap<>();
             map.put("drop", 1);
             map.put("$db", db);
-            op.addDoc(map);
+            op.setFirstDoc(map);
             synchronized (SingleConnectDriver.this) {
                 sendQuery(op);
                 try {
@@ -708,7 +708,7 @@ public class SingleConnectDriver extends DriverBase {
             cmd.put("query", filter);
             cmd.put("limit", 1);
             cmd.put("$db", db);
-            op.addDoc(cmd);
+            op.setFirstDoc(cmd);
 
             synchronized (SingleConnectDriver.this) {
                 sendQuery(op);
@@ -749,7 +749,7 @@ public class SingleConnectDriver extends DriverBase {
             OpMsg q = new OpMsg();
             q.setMessageId(getNextId());
 
-            q.addDoc(cmd);
+            q.setFirstDoc(cmd);
             q.setFlags(0);
             q.setResponseTo(0);
 
@@ -771,7 +771,21 @@ public class SingleConnectDriver extends DriverBase {
 
     @Override
     public Map<String, Object> findAndOneAndDelete(String db, String col, Map<String, Object> query, Map<String, Integer> sort, Collation collation) throws MorphiumDriverException {
-        return null;
+        OpMsg msg = new OpMsg();
+        msg.setMessageId(getNextId());
+        Map<String, Object> cmd = Utils.getMap("findAndModify", (Object) col)
+                .add("query", query)
+                .add("sort", sort)
+                .add("collation", collation != null ? collation.toQueryObject() : null)
+                .add("new", true)
+                .add("$db", db);
+        msg.setFirstDoc(cmd);
+        msg.setFlags(0);
+        msg.setResponseTo(0);
+
+        OpMsg reply = sendAndWaitForReply(msg);
+
+        return reply.getFirstDoc();
     }
 
     @Override
@@ -796,7 +810,7 @@ public class SingleConnectDriver extends DriverBase {
                 cmd.put("filter", Utils.getMap("name", collection));
             }
             cmd.put("$db", db);
-            q.addDoc(cmd);
+            q.setFirstDoc(cmd);
             q.setFlags(0);
             q.setResponseTo(0);
 
@@ -825,7 +839,7 @@ public class SingleConnectDriver extends DriverBase {
             doc.put("explain", explain);
             doc.put("allowDiskUse", allowDiskUse);
 
-            q.addDoc(doc);
+            q.setFirstDoc(doc);
 
             synchronized (SingleConnectDriver.this) {
                 sendQuery(q);

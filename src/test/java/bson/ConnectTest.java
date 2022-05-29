@@ -16,7 +16,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -133,7 +132,7 @@ public class ConnectTest extends BaseTest {
 
         cmd.put("limit", 1);
         cmd.put("$db", "morphium_test");
-        q.addDoc(cmd);
+        q.setFirstDoc(cmd);
         q.setFlags(0);
         q.setResponseTo(0);
         out.write(q.bytes());
@@ -160,7 +159,7 @@ public class ConnectTest extends BaseTest {
         OpMsg msg = new OpMsg();
         msg.setMessageId(12434);
         msg.setFlags(0);
-        msg.setDocs(Arrays.asList(Utils.getMap("isMaster", (Object) true).add("$db", "morphium_test")));
+        msg.setFirstDoc(Utils.getMap("isMaster", (Object) true).add("$db", "morphium_test"));
 
         out.write(msg.bytes());
         out.flush();

@@ -81,10 +81,12 @@ public abstract class WireProtocolMessage {
         return new String(bytes, idx, i - idx);
     }
 
-    public WireProtocolMessage parseHeader(byte[] bytes, int offset) {
-        //parsing msgheader
-
-        return null;
+    public static int strLen(byte[] bytes, int idx) {
+        int i = idx;
+        while (bytes[i] != 0) {
+            i++;
+        }
+        return i - idx + 1;
     }
 
     public final byte[] bytes() throws IOException {
@@ -136,6 +138,10 @@ public abstract class WireProtocolMessage {
                 ((long) (bytes[idx + 6] & 0xFF) << 48) |
                 ((long) (bytes[idx + 7] & 0xFF) << 56);
 
+    }
+
+    public static void writeLong(long lng, OutputStream out) throws IOException {
+        for (int i = 7; i >= 0; i--) out.write((byte) ((lng >> ((7 - i) * 8)) & 0xff));
     }
 
     public enum OpCode {

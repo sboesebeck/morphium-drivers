@@ -588,7 +588,7 @@ public abstract class DriverBase implements MorphiumDriver {
         }
         OpMsg q = new OpMsg();
         q.setMessageId(getNextId());
-        q.addDoc(Utils.getMap("killCursors", (Object) coll)
+        q.setFirstDoc(Utils.getMap("killCursors", (Object) coll)
                 .add("cursors", cursorIds)
                 .add("$db", db)
         );
@@ -632,7 +632,7 @@ public abstract class DriverBase implements MorphiumDriver {
 
             OpMsg q = new OpMsg();
             q.setMessageId(getNextId());
-            q.addDoc(doc);
+            q.setFirstDoc(doc);
             q.setResponseTo(0);
 
             long start = System.currentTimeMillis();
@@ -647,17 +647,17 @@ public abstract class DriverBase implements MorphiumDriver {
                 log.debug("reading result");
                 reply = sendAndWaitForReply(q);
 
-                @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getDocs().get(0).get("cursor");
+                @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getFirstDoc().get("cursor");
                 if (cursor == null) {
                     log.debug("no-cursor result");
                     //                    //trying result
-                    if (reply.getDocs().get(0).get("result") != null) {
+                    if (reply.getFirstDoc().get("result") != null) {
                         //noinspection unchecked
-                        for (Map<String, Object> d : (List<Map<String, Object>>) reply.getDocs().get(0).get("result")) {
+                        for (Map<String, Object> d : (List<Map<String, Object>>) reply.getFirstDoc().get("result")) {
                             cb.incomingData(d, System.currentTimeMillis() - start);
                         }
                     }
-                    log.error("did not get cursor. Data: " + Utils.toJsonString(reply.getDocs().get(0)));
+                    log.error("did not get cursor. Data: " + Utils.toJsonString(reply.getFirstDoc()));
                     //                    throw new MorphiumDriverException("did not get any data, cursor == null!");
 
                     log.debug("Retrying");
@@ -717,7 +717,7 @@ public abstract class DriverBase implements MorphiumDriver {
                     doc.put("allowPartialResults", false);
                     q.setMessageId(getNextId());
 
-                    q.addDoc(doc);
+                    q.setFirstDoc(doc);
                     q.setResponseTo(0);
                     sendQuery(q);
                     continue;
@@ -737,7 +737,7 @@ public abstract class DriverBase implements MorphiumDriver {
                 doc.put("noCursorTimeout", true);
                 doc.put("$db", db);
 
-                q.addDoc(doc);
+                q.setFirstDoc(doc);
                 waitingfor = q.getMessageId();
                 sendQuery(q);
 

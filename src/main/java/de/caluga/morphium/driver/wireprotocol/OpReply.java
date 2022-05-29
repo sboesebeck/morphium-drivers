@@ -4,9 +4,10 @@ package de.caluga.morphium.driver.wireprotocol;/**
 
 
 import de.caluga.morphium.driver.bson.BsonDecoder;
+import de.caluga.morphium.driver.bson.BsonEncoder;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,9 +18,12 @@ import java.util.Map;
  **/
 
 public class OpReply extends WireProtocolMessage {
+    public static final int CURSOR_NOT_FOUND_FLAG = 1;
+    public static final int QUERY_FAILURE_FLAG = 2;
+    public static final int SHARD_CONFIG_STATE_FLAG = 4;
+    public static final int AWAIT_CAPABLE_FLAG = 8;
+
     public final long timestamp;
-    private int reqId;
-    private int inReplyTo;
     private int size = 0;
     private int opcode = 1;
     private int flags;
@@ -32,35 +36,18 @@ public class OpReply extends WireProtocolMessage {
         timestamp = System.currentTimeMillis();
     }
 
-    public void parse(byte[] bytes) throws UnsupportedEncodingException {
-        parse(bytes, 0);
-    }
-
-    public int getReqId() {
-        return reqId;
-    }
-
-    @SuppressWarnings("unused")
-    public void setReqId(int reqId) {
-        this.reqId = reqId;
-    }
-
-    public int getInReplyTo() {
-        return inReplyTo;
-    }
-
-    @SuppressWarnings("unused")
-    public void setInReplyTo(int inReplyTo) {
-        this.inReplyTo = inReplyTo;
-    }
-
-    @Override
-    public void parsePayload(byte[] bytes, int offset) throws IOException {
-    }
 
     @Override
     public byte[] getPayload() throws IOException {
-        return new byte[0];
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writeInt(flags, out);
+        writeLong(cursorId, out);
+        writeInt(startFrom, out);
+        writeInt(numReturned, out);
+        for (Map<String, Object> doc : documents) {
+            out.write(BsonEncoder.encodeDocument(doc));
+        }
+        return out.toByteArray();
     }
 
     @SuppressWarnings("unused")
@@ -123,23 +110,17 @@ public class OpReply extends WireProtocolMessage {
         return documents;
     }
 
+    public void addDocument(Map<String, Object> doc) {
+        if (documents == null) documents = new ArrayList<>();
+        documents.add(doc);
+    }
+
     @SuppressWarnings("unused")
     public void setDocuments(List<Map<String, Object>> documents) {
         this.documents = documents;
     }
 
-    private void parse(byte[] bytes, int offset) throws UnsupportedEncodingException {
-        size = WireProtocolMessage.readInt(bytes, offset);
-        offset += 4;
-        reqId = WireProtocolMessage.readInt(bytes, offset);
-        offset += 4;
-        inReplyTo = WireProtocolMessage.readInt(bytes, offset);
-        offset += 4;
-        opcode = WireProtocolMessage.readInt(bytes, offset);
-        offset += 4;
-        if (opcode != 1) {
-            throw new IllegalArgumentException("Unknown Opcode " + opcode);
-        }
+    public void parsePayload(byte[] bytes, int offset) throws IOException {
         flags = WireProtocolMessage.readInt(bytes, offset);
         offset += 4;
         cursorId = WireProtocolMessage.readLong(bytes, offset);
@@ -149,11 +130,11 @@ public class OpReply extends WireProtocolMessage {
         numReturned = WireProtocolMessage.readInt(bytes, offset);
         offset += 4;
 
-        BsonDecoder dec = new BsonDecoder();
+
         documents = new ArrayList<>();
         for (int i = 0; i < numReturned; i++) {
             Map<String, Object> m = new HashMap<>();
-            int l = dec.decodeDocumentIn(m, bytes, offset);
+            int l = BsonDecoder.decodeDocumentIn(m, bytes, offset);
             offset += l;
             documents.add(m);
         }

@@ -1,15 +1,12 @@
 package de.caluga.morphium.driver.wireprotocol;
 
-import de.caluga.morphium.Utils;
 import de.caluga.morphium.driver.bson.BsonDecoder;
 import de.caluga.morphium.driver.bson.BsonEncoder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.zip.CRC32C;
 
 /**
  * see https://github.com/mongodb/specifications/blob/master/source/message/OP_MSG.rst
@@ -51,27 +48,25 @@ public class OpMsg extends WireProtocolMessage {
     public static final int EXHAUST_ALLOWED = 65536;
 
 
-    private List<Map<String, Object>> docs;
+    private Map<String, Object> firstDoc;
+    private Map<String, List<Map<String, Object>>> documents;
 
     private int flags;
 
-    public void addDoc(Map<String, Object> o) {
-        if (docs == null) docs = new ArrayList<>();
-        docs.add(o);
+    public void addDoc(String seqId, Map<String, Object> o) {
+        if (documents == null) documents = new LinkedHashMap<>();
+        documents.putIfAbsent(seqId, new ArrayList<>());
+        documents.get(seqId).add(o);
     }
 
     public Map<String, Object> getFirstDoc() {
-        if (docs == null || docs.size() == 0) return null;
-        return docs.get(0);
+        return firstDoc;
     }
 
-    public List<Map<String, Object>> getDocs() {
-        return docs;
+    public void setFirstDoc(Map<String, Object> o) {
+        firstDoc = o;
     }
 
-    public void setDocs(List<Map<String, Object>> docs) {
-        this.docs = docs;
-    }
 
     public int getFlags() {
         return flags;
@@ -81,23 +76,47 @@ public class OpMsg extends WireProtocolMessage {
         this.flags = flags;
     }
 
-
     @Override
     public void parsePayload(byte[] bytes, int offset) throws IOException {
         flags = readInt(bytes, offset);
         int idx = offset + 4;
-        BsonDecoder dec = new BsonDecoder();
-        docs = new ArrayList<>();
-        while (idx < bytes.length) {
+        int len = bytes.length;
+        if ((getFlags() | CHECKSUM_PRESENT) != 0) {
+            len = bytes.length - 4;
+        }
+
+        while (idx < len) {
             //reading in sections
             byte section = bytes[idx];
             idx++;
             if (section == 0) {
                 Map<String, Object> result = new HashMap<>();
-                int l = dec.decodeDocumentIn(result, bytes, idx);
-                docs.add(result);
+                int l = BsonDecoder.decodeDocumentIn(result, bytes, idx);
+                firstDoc = result;
                 idx += l;
+            } else if (section == 1) {
+                //size
+                //sequence ID
+                //Documents
+                int size = readInt(bytes, idx);
+                String seqId = readString(bytes, idx + 4);
+                int strLen = strLen(bytes, idx + 4);
+                int i = 0;
+                while (4 + strLen + i < size) {
+                    Map<String, Object> doc = new LinkedHashMap<>();
+                    i += BsonDecoder.decodeDocumentIn(doc, bytes, idx + 4 + strLen + i);
+                    addDoc(seqId, doc);
+                }
+                idx += 4 + strLen + i;
+            } else {
+                throw new RuntimeException("wrong section ID " + section);
             }
+        }
+        if ((getFlags() | CHECKSUM_PRESENT) != 0) {
+            int crc = readInt(bytes, idx);
+            CRC32C c = new CRC32C();
+            c.update(bytes, 0, bytes.length - 4);
+            assert (crc == ((int) c.getValue()));
         }
     }
 
@@ -105,15 +124,28 @@ public class OpMsg extends WireProtocolMessage {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writeInt(flags, out);
         out.write((byte) 0); //section basic
-        byte[] d = BsonEncoder.encodeDocument(docs.get(0));
+        byte[] d = BsonEncoder.encodeDocument(firstDoc);
         out.write(d);
-        if (docs.size() > 1) {
-//            for (int i = 1; i < docs.size(); i++) {
-//            }
-            throw new RuntimeException("Not supported yet");
+        if (documents != null) {
+            for (String seqId : documents.keySet()) {
+                ByteArrayOutputStream sectionOut = new ByteArrayOutputStream();
+                writeString(seqId, sectionOut);
+                for (Map<String, Object> doc : documents.get(seqId)) {
+                    sectionOut.write(BsonEncoder.encodeDocument(doc));
+                }
+                byte[] section = sectionOut.toByteArray();
+                writeInt(section.length, out);
+            }
         }
-
-        return out.toByteArray();
+        byte[] ret = out.toByteArray();
+        if ((getFlags() | CHECKSUM_PRESENT) != 0) {
+            //CRC32 checksum
+            CRC32C crc = new CRC32C();
+            crc.update(ret);
+            writeInt((int) crc.getValue(), out);
+            ret = out.toByteArray();
+        }
+        return ret;
     }
 
     @Override
@@ -121,11 +153,4 @@ public class OpMsg extends WireProtocolMessage {
         return OpCode.OP_MSG.opCode;
     }
 
-    @Override
-    public String toString() {
-        return "OpMsg{" +
-                "docs=" + Utils.toJsonString(docs.get(0)) +
-                ", flags=" + flags +
-                '}';
-    }
 }

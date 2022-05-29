@@ -15,7 +15,7 @@ public class WireProtocolTests {
         msg.setMessageId(123);
         msg.setResponseTo(42);
         msg.setFlags(OpMsg.EXHAUST_ALLOWED);
-        msg.addDoc(Utils.getMap("hello", 1));
+        msg.setFirstDoc(Utils.getMap("hello", 1));
 
         byte[] data = msg.bytes();
 

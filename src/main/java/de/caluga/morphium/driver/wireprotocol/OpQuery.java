@@ -19,6 +19,15 @@ import java.util.Map;
 public class OpQuery extends WireProtocolMessage {
     private static final int OP_CODE = 2004;
 
+    public static final int TAILABLE_CURSOR_FLAG = 2;
+    public static final int SLAVE_OK_FLAG = 4;
+    public static final int OPLOG_REPLAY_FLAG = 8;
+    public static final int NO_CURSOR_TIMEOUT_FLAG = 16;
+    public static final int AWAIT_DATA_FLAG = 32;
+    public static final int EXHAUST_FLAG = 64;
+    public static final int PARTIAL_FLAG = 128;
+
+
     private String db;
     private String coll;
     private int skip = 0;
