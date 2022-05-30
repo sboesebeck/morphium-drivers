@@ -21,6 +21,7 @@ public class WireProtocolTests {
 
         WireProtocolMessage wp = WireProtocolMessage.parseFromStream(new ByteArrayInputStream(data));
         assert (wp != null);
+        assert (wp instanceof OpMsg);
 
     }
 }

@@ -81,7 +81,7 @@ public class OpMsg extends WireProtocolMessage {
         flags = readInt(bytes, offset);
         int idx = offset + 4;
         int len = bytes.length;
-        if ((getFlags() | CHECKSUM_PRESENT) != 0) {
+        if ((getFlags() & CHECKSUM_PRESENT) != 0) {
             len = bytes.length - 4;
         }
 
@@ -112,7 +112,7 @@ public class OpMsg extends WireProtocolMessage {
                 throw new RuntimeException("wrong section ID " + section);
             }
         }
-        if ((getFlags() | CHECKSUM_PRESENT) != 0) {
+        if ((getFlags() & CHECKSUM_PRESENT) != 0) {
             int crc = readInt(bytes, idx);
             CRC32C c = new CRC32C();
             c.update(bytes, 0, bytes.length - 4);
@@ -138,7 +138,7 @@ public class OpMsg extends WireProtocolMessage {
             }
         }
         byte[] ret = out.toByteArray();
-        if ((getFlags() | CHECKSUM_PRESENT) != 0) {
+        if ((getFlags() & CHECKSUM_PRESENT) != 0) {
             //CRC32 checksum
             CRC32C crc = new CRC32C();
             crc.update(ret);

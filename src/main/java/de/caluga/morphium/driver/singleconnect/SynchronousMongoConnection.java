@@ -10,6 +10,7 @@ import de.caluga.morphium.driver.*;
 import de.caluga.morphium.driver.bulk.BulkRequestContext;
 import de.caluga.morphium.driver.wireprotocol.OpMsg;
 import de.caluga.morphium.driver.wireprotocol.WireProtocolMessage;
+import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,9 +29,9 @@ import java.util.stream.Collectors;
  * <p>
  * connects to one node only!
  */
-public class SingleConnectDriver extends DriverBase {
+public class SynchronousMongoConnection extends DriverBase {
 
-    private final Logger log = LoggerFactory.getLogger(SingleConnectDriver.class);
+    private final Logger log = LoggerFactory.getLogger(SynchronousMongoConnection.class);
     private Socket s;
     private OutputStream out;
     private InputStream in;
@@ -73,7 +74,7 @@ public class SingleConnectDriver extends DriverBase {
 
 
             try {
-                Map<String, Object> result = runCommand("local", Utils.getMap("isMaster", true));
+                Map<String, Object> result = runCommand("local", Utils.getMap("hello", true));
                 //log.info("Got result");
 //                if (!result.get("ismaster").equals(true)) {
 //                    close();
@@ -170,7 +171,7 @@ public class SingleConnectDriver extends DriverBase {
             q.setFirstDoc(cmd);
 
             OpMsg rep = null;
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(q);
                 try {
                     rep = waitForReply(db, null, null, q.getMessageId());
@@ -216,7 +217,7 @@ public class SingleConnectDriver extends DriverBase {
         q.setResponseTo(0);
 
         OpMsg reply;
-        synchronized (SingleConnectDriver.this) {
+        synchronized (SynchronousMongoConnection.this) {
             sendQuery(q);
 
             int waitingfor = q.getMessageId();
@@ -256,12 +257,12 @@ public class SingleConnectDriver extends DriverBase {
 
     @Override
     public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
-
+        throw new MorphiumDriverException("Watch not possible with synchronous communication!");
     }
 
     @Override
     public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
-
+        throw new MorphiumDriverException("Watch not possible with synchronous communication!");
     }
 
     @Override
@@ -274,7 +275,7 @@ public class SingleConnectDriver extends DriverBase {
             return null;
         }
         OpMsg reply;
-        synchronized (SingleConnectDriver.this) {
+        synchronized (SynchronousMongoConnection.this) {
             OpMsg q = new OpMsg();
 
             q.setFirstDoc(Utils.getMap("getMore", (Object) cursorId)
@@ -346,7 +347,7 @@ public class SingleConnectDriver extends DriverBase {
                     ));
             q.setMessageId(getNextId());
             q.setFlags(0);
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(q);
 
                 int waitingfor = q.getMessageId();
@@ -362,11 +363,13 @@ public class SingleConnectDriver extends DriverBase {
         List<Map<String, Object>> ret = new ArrayList<>();
 
         Map<String, Object> doc;
-        synchronized (SingleConnectDriver.this) {
+        synchronized (SynchronousMongoConnection.this) {
             while (true) {
                 OpMsg reply = getReply();
                 if (reply.getResponseTo() != waitingfor) {
-                    throw new MorphiumDriverNetworkException("Wrong answer - waiting for " + waitingfor + " but got " + reply.getResponseTo());
+                    log.error("Wrong answer - waiting for " + waitingfor + " but got " + reply.getResponseTo());
+                    log.error("Document: " + Utils.toJsonString(reply.getFirstDoc()));
+                    continue;
                 }
                 //                    replies.remove(i);
                 @SuppressWarnings("unchecked") Map<String, Object> cursor = (Map<String, Object>) reply.getFirstDoc().get("cursor");
@@ -405,11 +408,6 @@ public class SingleConnectDriver extends DriverBase {
             }
         }
         return ret;
-    }
-
-    @Override
-    public Map<String, Object> update(String db, String collection, List<Map<String, Object>> updateCommand, boolean ordered, WriteConcern wc) throws MorphiumDriverException {
-        return null;
     }
 
 
@@ -455,7 +453,7 @@ public class SingleConnectDriver extends DriverBase {
             q.setResponseTo(0);
 
             OpMsg rep;
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(q);
                 rep = waitForReply(db, collection, query, q.getMessageId());
             }
@@ -494,7 +492,7 @@ public class SingleConnectDriver extends DriverBase {
                 map.put("writeConcern", new HashMap<String, Object>());
                 op.setFirstDoc(map);
 
-                synchronized (SingleConnectDriver.this) {
+                synchronized (SynchronousMongoConnection.this) {
                     sendQuery(op);
                     waitForReply(db, collection, null, op.getMessageId());
                 }
@@ -506,33 +504,22 @@ public class SingleConnectDriver extends DriverBase {
     @Override
     public Map<String, Integer> store(String db, String collection, List<Map<String, Object>> objs, WriteConcern wc) throws MorphiumDriverException {
         new NetworkCallHelper().doCall(() -> {
-            List<Map<String, Object>> toInsert = new ArrayList<>();
-            List<Map<String, Object>> toUpdate = new ArrayList<>();
-            List<Map<String, Object>> update = new ArrayList<>();
+
+            List<Map<String, Object>> opsLst = new ArrayList<>();
             for (Map<String, Object> o : objs) {
-                if (o.get("_id") == null) {
-                    toInsert.add(o);
-                } else {
-                    toUpdate.add(o);
-                }
-            }
-            List<Map<String, Object>> updateCmd = new ArrayList<>();
-            for (Map<String, Object> obj : toUpdate) {
+                o.putIfAbsent("_id", new ObjectId());
                 Map<String, Object> up = new HashMap<>();
-                up.put("q", Utils.getMap("_id", obj.get("_id")));
-                up.put("u", obj);
+                up.put("q", Utils.getMap("_id", o.get("_id")));
+                up.put("u", o);
                 up.put("upsert", true);
                 up.put("multi", false);
-
-                updateCmd.add(up);
+                up.put("collation", null);
+                //up.put("arrayFilters",list of arrayfilters)
+                //up.put("hint",indexInfo);
+                //up.put("c",variablesDocument);
+                opsLst.add(up);
             }
-            if (!updateCmd.isEmpty()) {
-                update(db, collection, updateCmd, false, wc);
-            }
-
-            if (!toInsert.isEmpty()) {
-                insert(db, collection, toInsert, wc);
-            }
+            update(db, collection, opsLst, false, null);
             return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
         return null;
@@ -546,32 +533,37 @@ public class SingleConnectDriver extends DriverBase {
         up.put("u", ops);
         up.put("upsert", upsert);
         up.put("multi", multiple);
+        up.put("collation", collation != null ? collation.toQueryObject() : null);
+        //up.put("arrayFilters",list of arrayfilters)
+        //up.put("hint",indexInfo);
+        //up.put("c",variablesDocument);
         opsLst.add(up);
         return update(db, collection, opsLst, false, wc);
     }
 
-    public Map<String, Object> update(String db, String collection, List<Map<String, Object>> updateCommand, boolean ordered, Collation collation, WriteConcern wc) throws MorphiumDriverException {
+    @Override
+    public Map<String, Object> update(String db, String collection, List<Map<String, Object>> updateCommands, boolean ordered, WriteConcern wc) throws MorphiumDriverException {
         return new NetworkCallHelper().doCall(() -> {
             OpMsg op = new OpMsg();
             op.setResponseTo(0);
             op.setMessageId(getNextId());
             HashMap<String, Object> map = new LinkedHashMap<>();
             map.put("update", collection);
-            map.put("updates", updateCommand);
-            map.put("ordered", false);
+            map.put("updates", updateCommands);
+            map.put("ordered", ordered);
             map.put("$db", db);
-            map.put("writeConcern", new HashMap<String, Object>());
             op.setFirstDoc(map);
-            synchronized (SingleConnectDriver.this) {
+            WriteConcern lwc = wc;
+            if (lwc == null) lwc = WriteConcern.getWc(0, false, false, 0);
+            map.put("writeConcern", lwc.toMongoWriteConcern().asDocument());
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(op);
-                if (wc != null) {
-                    OpMsg res = waitForReply(db, collection, null, op.getMessageId());
-                    return res.getFirstDoc();
-                }
+                OpMsg res = waitForReply(db, collection, null, op.getMessageId());
+                return res.getFirstDoc();
             }
-            return null;
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
     }
+
 
     @Override
     public Map<String, Object> delete(String db, String collection, Map<String, Object> query,
@@ -602,7 +594,7 @@ public class SingleConnectDriver extends DriverBase {
             op.setFirstDoc(o);
 
 
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(op);
 
                 int waitingfor = op.getMessageId();
@@ -650,7 +642,7 @@ public class SingleConnectDriver extends DriverBase {
             map.put("drop", collection);
             map.put("$db", db);
             op.setFirstDoc(map);
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(op);
                 try {
                     waitForReply(db, collection, null, op.getMessageId());
@@ -673,7 +665,7 @@ public class SingleConnectDriver extends DriverBase {
             map.put("drop", 1);
             map.put("$db", db);
             op.setFirstDoc(map);
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(op);
                 try {
                     waitForReply(db, null, null, op.getMessageId());
@@ -710,7 +702,7 @@ public class SingleConnectDriver extends DriverBase {
             cmd.put("$db", db);
             op.setFirstDoc(cmd);
 
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(op);
                 //noinspection EmptyCatchBlock
                 try {
@@ -754,7 +746,7 @@ public class SingleConnectDriver extends DriverBase {
             q.setResponseTo(0);
 
             List<Map<String, Object>> ret;
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(q);
 
                 ret = readBatches(q.getMessageId(), db, null, getMaxWriteBatchSize());
@@ -815,7 +807,7 @@ public class SingleConnectDriver extends DriverBase {
             q.setResponseTo(0);
 
             List<Map<String, Object>> ret;
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(q);
 
                 ret = readBatches(q.getMessageId(), db, null, getMaxWriteBatchSize());
@@ -841,7 +833,7 @@ public class SingleConnectDriver extends DriverBase {
 
             q.setFirstDoc(doc);
 
-            synchronized (SingleConnectDriver.this) {
+            synchronized (SynchronousMongoConnection.this) {
                 sendQuery(q);
                 List<Map<String, Object>> lst = readBatches(q.getMessageId(), db, collection, getMaxWriteBatchSize());
                 return Utils.getMap("result", lst);

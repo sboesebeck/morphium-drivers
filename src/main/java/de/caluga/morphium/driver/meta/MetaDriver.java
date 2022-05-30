@@ -12,7 +12,7 @@ import de.caluga.morphium.driver.constants.RunCommand;
 import de.caluga.morphium.driver.singleconnect.BulkContext;
 import de.caluga.morphium.driver.singleconnect.DriverBase;
 import de.caluga.morphium.driver.singleconnect.SingleConnectCursor;
-import de.caluga.morphium.driver.singleconnect.SingleConnectDriver;
+import de.caluga.morphium.driver.singleconnect.SynchronousMongoConnection;
 import de.caluga.morphium.driver.wireprotocol.OpMsg;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -975,7 +975,7 @@ public class MetaDriver extends DriverBase {
     }
 
     private DriverBase createAndConnectDriver(String host) throws MorphiumDriverException {
-        DriverBase d = new SingleConnectDriver();
+        DriverBase d = new SynchronousMongoConnection();
         d.setHostSeed(host); //only connecting to one host
         d.setConnectionTimeout(getConnectionTimeout());
         d.setDefaultWriteTimeout(getDefaultWriteTimeout());

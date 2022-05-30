@@ -1,6 +1,7 @@
 package de.caluga.morphium.driver.bson;
 
 import de.caluga.morphium.driver.MorphiumId;
+import org.bson.types.ObjectId;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -104,7 +105,7 @@ public class BsonEncoder {
             writeByte(4);
             cString(n);
 
-            Map<String, Object> doc = new HashMap<>();
+            Map<String, Object> doc = new LinkedHashMap<>();
             int cnt = 0;
             if (Collection.class.isAssignableFrom(v.getClass())) {
                 List l = new ArrayList();
@@ -140,6 +141,10 @@ public class BsonEncoder {
             writeByte(0); //subtype
 
             writeBytes(data);
+        } else if (ObjectId.class.isAssignableFrom(v.getClass())) {
+            writeByte(7);
+            cString(n);
+            writeBytes(((ObjectId) v).toByteArray());
         } else if (MorphiumId.class.isAssignableFrom(v.getClass())) {
             writeByte(7);
             cString(n);
@@ -183,7 +188,7 @@ public class BsonEncoder {
             MongoJSScript s = (MongoJSScript) v;
             if (s.getContext() != null) {
                 //                try {
-                    writeByte(0x0f);
+                writeByte(0x0f);
                 //                    long sz = n.getBytes("UTF-8").length + 1 + 4 + b.length; //size+stringlength+1 (ending 0)+document length
                 cString(n);
                 int l = s.getJs().length() + 4; //String length
