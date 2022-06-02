@@ -174,7 +174,7 @@ public class SynchronousMongoConnection extends DriverBase {
             synchronized (SynchronousMongoConnection.this) {
                 sendQuery(q);
                 try {
-                    rep = waitForReply(db, null, null, q.getMessageId());
+                    rep = waitForReply(db, null, q.getMessageId());
                 } catch (MorphiumDriverException e) {
                     e.printStackTrace();
                 }
@@ -255,14 +255,112 @@ public class SynchronousMongoConnection extends DriverBase {
 
     }
 
-    @Override
-    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
-        throw new MorphiumDriverException("Watch not possible with synchronous communication!");
+    /**
+     * watch for changes in all databases
+     * this is a synchronous call which blocks until the C
+     *
+     * @param maxWait
+     * @param fullDocumentOnUpdate
+     * @param pipeline
+     * @param cb
+     * @throws MorphiumDriverException
+     */
+    public void watch(int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+
     }
 
+    /**
+     * watch for changes in the given database
+     *
+     * @param db
+     * @param maxWait
+     * @param fullDocumentOnUpdate
+     * @param pipeline
+     * @param cb
+     * @throws MorphiumDriverException
+     */
+    @Override
+    public void watch(String db, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
+        OpMsg msg = new OpMsg();
+        msg.setMessageId(getNextId());
+        Map<String, Object> cmd = Utils.getMap("aggregate", (Object) 1).add("pipeline", pipeline)
+                .add("$db", db);
+        msg.setFirstDoc(cmd);
+        sendQuery(msg);
+        OpMsg reply = waitForReply(db, null, msg.getMessageId());
+
+
+    }
+
+    /**
+     * watch for changes in the given db and collection
+     *
+     * @param db
+     * @param collection
+     * @param maxWait
+     * @param fullDocumentOnUpdate
+     * @param pipeline
+     * @param cb
+     * @throws MorphiumDriverException
+     */
     @Override
     public void watch(String db, String collection, int maxWait, boolean fullDocumentOnUpdate, List<Map<String, Object>> pipeline, DriverTailableIterationCallback cb) throws MorphiumDriverException {
-        throw new MorphiumDriverException("Watch not possible with synchronous communication!");
+        if (maxWait <= 0) maxWait = getReadTimeout();
+        OpMsg startMsg = new OpMsg();
+        startMsg.setMessageId(getNextId());
+        ArrayList<Map<String, Object>> localPipeline = new ArrayList<>();
+        localPipeline.add(Utils.getMap("$changeStream", new HashMap<>()));
+        if (pipeline != null && !pipeline.isEmpty()) localPipeline.addAll(pipeline);
+        Map<String, Object> cmd = Utils.getMap("aggregate", (Object) collection).add("pipeline", localPipeline)
+                .add("cursor", Utils.getMap("batchSize", (Object) 1))  //getDefaultBatchSize()
+                .add("$db", db);
+        startMsg.setFirstDoc(cmd);
+        long start = System.currentTimeMillis();
+        sendQuery(startMsg);
+
+        OpMsg msg = startMsg;
+        while (true) {
+            OpMsg reply = waitForReply(db, collection, msg.getMessageId());
+            log.info("got answer for watch!");
+            Map<String, Object> cursor = (Map<String, Object>) reply.getFirstDoc().get("cursor");
+            if (cursor == null) throw new MorphiumDriverException("Could not watch - cursor is null");
+            log.debug("CursorID:" + cursor.get("id").toString());
+            long cursorId = Long.valueOf(cursor.get("id").toString());
+
+            List<Map<String, Object>> result = (List<Map<String, Object>>) cursor.get("firstBatch");
+            if (result == null) {
+                result = (List<Map<String, Object>>) cursor.get("nextBatch");
+            }
+            if (result != null) {
+                for (Map<String, Object> o : result) {
+                    cb.incomingData(o, System.currentTimeMillis() - start);
+                }
+            }
+            if (!cb.isContinued()) {
+                killCursors(db, collection, cursorId);
+                break;
+            }
+            if (cursorId != 0) {
+                msg = new OpMsg();
+                msg.setMessageId(getNextId());
+
+                Map<String, Object> doc = new LinkedHashMap<>();
+                doc.put("getMore", cursorId);
+                doc.put("collection", collection);
+                doc.put("batchSize", 1);   //getDefaultBatchSize());
+                doc.put("maxTimeMS", maxWait);
+                doc.put("$db", db);
+                msg.setFirstDoc(doc);
+                sendQuery(msg);
+                log.debug("sent getmore....");
+            } else {
+                log.debug("Cursor exhausted, restarting");
+                msg = startMsg;
+                msg.setMessageId(getNextId());
+                sendQuery(msg);
+
+            }
+        }
     }
 
     @Override
@@ -455,7 +553,7 @@ public class SynchronousMongoConnection extends DriverBase {
             OpMsg rep;
             synchronized (SynchronousMongoConnection.this) {
                 sendQuery(q);
-                rep = waitForReply(db, collection, query, q.getMessageId());
+                rep = waitForReply(db, collection,  q.getMessageId());
             }
             Integer n = (Integer) rep.getFirstDoc().get("n");
             return Utils.getMap("count", n == null ? 0 : n);
@@ -494,7 +592,7 @@ public class SynchronousMongoConnection extends DriverBase {
 
                 synchronized (SynchronousMongoConnection.this) {
                     sendQuery(op);
-                    waitForReply(db, collection, null, op.getMessageId());
+                    waitForReply(db, collection,  op.getMessageId());
                 }
             }
             return null;
@@ -558,7 +656,7 @@ public class SynchronousMongoConnection extends DriverBase {
             map.put("writeConcern", lwc.toMongoWriteConcern().asDocument());
             synchronized (SynchronousMongoConnection.this) {
                 sendQuery(op);
-                OpMsg res = waitForReply(db, collection, null, op.getMessageId());
+                OpMsg res = waitForReply(db, collection,  op.getMessageId());
                 return res.getFirstDoc();
             }
         }, getRetriesOnNetworkError(), getSleepBetweenErrorRetries());
@@ -599,7 +697,7 @@ public class SynchronousMongoConnection extends DriverBase {
 
                 int waitingfor = op.getMessageId();
                 //        if (wc == null || wc.getW() == 0) {
-                waitForReply(db, collection, query, waitingfor);
+                waitForReply(db, collection, waitingfor);
                 //        }
             }
             return null;
@@ -607,7 +705,7 @@ public class SynchronousMongoConnection extends DriverBase {
     }
 
     @SuppressWarnings("StatementWithEmptyBody")
-    private OpMsg waitForReply(String db, String collection, Map<String, Object> query, int waitingfor) throws MorphiumDriverException {
+    private OpMsg waitForReply(String db, String collection, int waitingfor) throws MorphiumDriverException {
         OpMsg reply;
         reply = getReply();
         //                replies.remove(i);
@@ -616,7 +714,7 @@ public class SynchronousMongoConnection extends DriverBase {
                 Object code = reply.getFirstDoc().get("code");
                 Object errmsg = reply.getFirstDoc().get("errmsg");
                 //                throw new MorphiumDriverException("Operation failed - error: " + code + " - " + errmsg, null, collection, db, query);
-                MorphiumDriverException mde = new MorphiumDriverException("Operation failed on " + getHostSeed()[0] + " - error: " + code + " - " + errmsg, null, collection, db, query);
+                MorphiumDriverException mde = new MorphiumDriverException("Operation failed on " + getHostSeed()[0] + " - error: " + code + " - " + errmsg, null, collection, db, null);
                 mde.setMongoCode(code);
                 mde.setMongoReason(errmsg);
 
@@ -645,7 +743,7 @@ public class SynchronousMongoConnection extends DriverBase {
             synchronized (SynchronousMongoConnection.this) {
                 sendQuery(op);
                 try {
-                    waitForReply(db, collection, null, op.getMessageId());
+                    waitForReply(db, collection,  op.getMessageId());
                 } catch (Exception e) {
                     log.warn("Drop failed! " + e.getMessage());
                 }
@@ -668,7 +766,7 @@ public class SynchronousMongoConnection extends DriverBase {
             synchronized (SynchronousMongoConnection.this) {
                 sendQuery(op);
                 try {
-                    waitForReply(db, null, null, op.getMessageId());
+                    waitForReply(db, null,  op.getMessageId());
                 } catch (Exception e) {
                     log.error("Drop failed! " + e.getMessage());
                 }
@@ -706,7 +804,7 @@ public class SynchronousMongoConnection extends DriverBase {
                 sendQuery(op);
                 //noinspection EmptyCatchBlock
                 try {
-                    OpMsg res = waitForReply(db, null, null, op.getMessageId());
+                    OpMsg res = waitForReply(db, null,  op.getMessageId());
                     log.error("Need to implement distinct");
                 } catch (Exception e) {
 
@@ -830,6 +928,7 @@ public class SynchronousMongoConnection extends DriverBase {
             doc.put("pipeline", pipeline);
             doc.put("explain", explain);
             doc.put("allowDiskUse", allowDiskUse);
+            doc.put("cursor", Utils.getMap("batchSize", getDefaultBatchSize()));
 
             q.setFirstDoc(doc);
 

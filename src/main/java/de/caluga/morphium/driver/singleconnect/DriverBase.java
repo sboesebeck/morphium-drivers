@@ -52,6 +52,10 @@ public abstract class DriverBase implements MorphiumDriver {
     private int maxConnectionsPerHost = 100;
     private int defaultWriteTimeout = 10000;
     private boolean slaveOk = true;
+    private int batchSize = 100;
+    private boolean retryReads = false;
+    private boolean retryWrites = true;
+    private int readTimeout = 30000;
 
     public boolean isSlaveOk() {
         return slaveOk;
@@ -73,42 +77,43 @@ public abstract class DriverBase implements MorphiumDriver {
 
     @Override
     public int getMaxConnections() {
-        return 0;
+        return maxConnectionsPerHost;
     }
 
     @Override
     public void setMaxConnections(int maxConnections) {
-
+        maxConnectionsPerHost = maxConnections;
     }
 
     @Override
     public int getMinConnections() {
-        return 0;
+        return 1;
     }
 
     @Override
     public void setMinConnections(int minConnections) {
+        minConnectionsPerHost = minConnections;
 
     }
 
     @Override
     public boolean isRetryReads() {
-        return false;
+        return retryReads;
     }
 
     @Override
     public void setRetryReads(boolean retryReads) {
-
+        this.retryReads = retryReads;
     }
 
     @Override
     public boolean isRetryWrites() {
-        return false;
+        return retryWrites;
     }
 
     @Override
     public void setRetryWrites(boolean retryWrites) {
-
+        this.retryWrites = retryWrites;
     }
 
     @Override
@@ -123,12 +128,12 @@ public abstract class DriverBase implements MorphiumDriver {
 
     @Override
     public int getReadTimeout() {
-        return 0;
+        return readTimeout;
     }
 
     @Override
     public void setReadTimeout(int readTimeout) {
-
+        this.readTimeout = readTimeout;
     }
 
     public int getMinConnectionsPerHost() {
@@ -247,7 +252,7 @@ public abstract class DriverBase implements MorphiumDriver {
 
     @Override
     public void setCredentials(Map<String, String[]> credentials) {
-
+        //this.credentials=credentials;
     }
 
     @Override
@@ -348,11 +353,12 @@ public abstract class DriverBase implements MorphiumDriver {
 
     @Override
     public boolean isDefaultFsync() {
-        return false;
+        return defaultJ;
     }
 
     @Override
     public void setDefaultFsync(boolean j) {
+        defaultJ = j;
     }
 
     @Override
@@ -428,7 +434,7 @@ public abstract class DriverBase implements MorphiumDriver {
 
     @Override
     public void setHeartbeatFrequency(int heartbeatFrequency) {
-
+        this.heartbeatFrequency = heartbeatFrequency;
     }
 
     public abstract Map<String, Object> update(String db, String collection, List<Map<String, Object>> updateCommand, boolean ordered, WriteConcern wc) throws MorphiumDriverException;
@@ -451,9 +457,13 @@ public abstract class DriverBase implements MorphiumDriver {
         defaultRP = rp;
     }
 
+    public int getDefaultBatchSize() {
+        return batchSize;
+    }
+
     @Override
     public void setDefaultBatchSize(int defaultBatchSize) {
-
+        this.batchSize = defaultBatchSize;
     }
 
     @Override
@@ -463,7 +473,7 @@ public abstract class DriverBase implements MorphiumDriver {
 
     @Override
     public void setUseSSL(boolean useSSL) {
-
+        this.useSSL = useSSL;
     }
 
     @Override
